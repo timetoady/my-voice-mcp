@@ -1,0 +1,45 @@
+{
+  "name": "my-voice-mcp",
+  "version": "0.1.0",
+  "description": "Local-first MCP server for voice profile analysis, style comparison, and rewriting.",
+  "type": "module",
+  "bin": {
+    "my-voice-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "node -e \"import('node:fs/promises').then(fs => fs.rm('dist', { recursive: true, force: true }))\"",
+    "dev:http": "tsx src/index.ts http",
+    "dev:stdio": "tsx src/index.ts stdio",
+    "start:http": "node dist/index.js http",
+    "start:stdio": "node dist/index.js stdio",
+    "test": "node --import tsx --test --test-concurrency=1 tests/**/*.test.ts"
+  },
+  "keywords": [
+    "mcp",
+    "writing-style",
+    "voice",
+    "ollama",
+    "open-webui"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.1064.0",
+    "@cfworker/json-schema": "^4.1.1",
+    "@modelcontextprotocol/node": "^2.0.0-alpha.2",
+    "@modelcontextprotocol/server": "^2.0.0-alpha.2",
+    "pdfjs-dist": "^6.0.227",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.1",
+    "@types/pdfkit": "^0.17.6",
+    "pdfkit": "^0.19.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}
