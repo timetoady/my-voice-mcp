@@ -1,0 +1,10 @@
+Hi Melissa,
+
+I wanted to send a quick note before tomorrow's meeting so the discussion can start from the same assumptions. My sense is that we are mostly aligned already, but there are still a few places where the terminology is doing more work than the actual decision, and that can make the handoff feel murkier than it needs to.
+
+It would be helpful if we could leave the meeting with a simple answer on ownership, timing, and what should count as done for the first pass. Once those points are settled, the rest of the work should move more cleanly.
+
+Please let me know if there is anything you want added to the agenda.
+
+Thanks,
+Adam

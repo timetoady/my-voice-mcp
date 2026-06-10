@@ -1,0 +1,20 @@
+[
+  {
+    "id": "generate-1",
+    "label": "ai con takeaways",
+    "prompt": "Draft an email on top-level takeaways from AI Con. Include the ideas that teams can ideate using generate and score, have AI critique and oppose by taking personas for feedback, and automate boring, systematic, important tasks.",
+    "length": "medium"
+  },
+  {
+    "id": "generate-2",
+    "label": "schedule adjustment",
+    "prompt": "Draft an email explaining that the review schedule needs to move by one week because upstream dependencies are still in progress, while keeping the tone calm and collaborative.",
+    "length": "medium"
+  },
+  {
+    "id": "generate-3",
+    "label": "request for feedback",
+    "prompt": "Draft an email asking a colleague for a quick read on a proposal before it goes to leadership, with an offer to discuss live if that is easier.",
+    "length": "short"
+  }
+]

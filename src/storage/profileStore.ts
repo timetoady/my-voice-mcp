@@ -14,6 +14,11 @@ interface ProfileIndex {
   profiles: ProfileIndexEntry[];
 }
 
+interface StoredFile {
+  relativePath: string;
+  content: string;
+}
+
 export class ProfileStore {
   private readonly indexPath: string;
 
@@ -66,26 +71,42 @@ export class ProfileStore {
 
   async saveProfile(params: {
     voiceId: string;
-    sourcePath: string;
-    sourceBufferSha?: string;
     profile: VoiceProfile;
     guideMarkdown: string;
     extractedText: string;
+    sourceFile?: {
+      sourcePath: string;
+      destinationName: string;
+    };
+    files?: StoredFile[];
   }): Promise<void> {
     const dir = this.profileDir(params.voiceId);
     await mkdir(dir, { recursive: true });
 
-    await Promise.all([
-      copyFile(params.sourcePath, path.join(dir, "source.pdf")),
+    const writeTasks: Array<Promise<unknown>> = [
       writeFile(path.join(dir, "guide.json"), JSON.stringify(params.profile, null, 2), "utf8"),
       writeFile(path.join(dir, "guide.md"), params.guideMarkdown, "utf8"),
       writeFile(path.join(dir, "extracted.txt"), params.extractedText, "utf8")
-    ]);
+    ];
+
+    if (params.sourceFile) {
+      writeTasks.push(copyFile(params.sourceFile.sourcePath, path.join(dir, params.sourceFile.destinationName)));
+    }
+
+    for (const file of params.files ?? []) {
+      const targetPath = path.join(dir, file.relativePath);
+      writeTasks.push(
+        mkdir(path.dirname(targetPath), { recursive: true }).then(() => writeFile(targetPath, file.content, "utf8"))
+      );
+    }
+
+    await Promise.all(writeTasks);
 
     const index = await this.readIndex();
     const entry: ProfileIndexEntry = {
       voiceId: params.profile.voiceId,
       voiceName: params.profile.voiceName,
+      profileType: params.profile.profileType,
       description: params.profile.description,
       createdAt: params.profile.createdAt,
       summary: params.profile.summary,

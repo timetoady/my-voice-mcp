@@ -1,0 +1,10 @@
+Hey Brady,
+
+I wanted to follow up on the Brightspot migration conversation and make sure we are aligned on the publishing path before we get too far into implementation. The main question on our side is whether Content Central can support the Church Historian's Press workflow without forcing every published item into the same public discovery pattern.
+
+It would be helpful to understand whether the no-index behavior is expected to be reliable now or whether we should still treat it as provisional. If it is still in progress, a rough sense of timing would help us decide how much to sequence around that dependency.
+
+If it is easier, I am happy to talk through it live rather than make you untangle it over email.
+
+Thanks,
+Adam

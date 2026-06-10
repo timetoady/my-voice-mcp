@@ -1,51 +1,57 @@
 # My Voice MCP Requirements and Delivery Tracker
 
-Last updated: June 8, 2026
+Last updated: June 10, 2026
 
 ## Product intent
 
-`my-voice-mcp` is an MVP MCP server for turning a user's sample writing into a compact, reusable voice profile and then applying that profile to new text through comparison, hinting, and rewrite flows.
+`my-voice-mcp` is an MVP MCP server for turning a user's writing samples into compact, reusable voice profiles and then applying those profiles to new text through comparison, rewrite, hint, snippet, and generation flows.
 
-This MVP is intentionally narrower than a full author-style platform. It is designed to prove that a lightweight guide-and-rewrite workflow can improve stylistic alignment without model fine-tuning.
+The current milestone is intentionally process-first for formal/work email. The goal is not to over-optimize one output at a time, but to improve the repeatable workflow for:
 
-## MVP scope
+1. curating a stable email voice profile from multiple samples
+2. rewriting or generating drafts in that voice
+3. comparing `fast` versus `reviewed` quality with a fixed human review set
 
-- Single-user voice library stored on the local filesystem.
-- One source PDF per voice profile.
-- Text-based PDFs only.
-- English-language prose as the default target.
-- Existing-text rewrite plus prompt-to-draft generation.
-- Local `stdio` transport for MCP clients.
-- Streamable HTTP transport for remote/containerized clients.
-- Bearer-token HTTP auth, with optional localhost dev bypass.
-- Provider adapter support for:
-  - `ollama`
-  - `openai-compatible`
-  - `bedrock`
-  - heuristic fallback when no remote provider is configured
+## Scope now in play
+
+- Single-user local voice library
+- English-language prose
+- Local `stdio` and Streamable HTTP MCP transports
+- Bearer-token HTTP auth with optional localhost bypass
+- Provider adapters for heuristic, OpenAI-compatible, Ollama, and Bedrock backends
+- Legacy single-PDF profile creation
+- Preferred bundled `email-formal` profile creation from 3+ samples
+- Rewrite and generation with `qualityMode: "fast" | "reviewed"`
+- Evaluation harness under `evals/email-formal`
+
+## Explicitly deferred
+
+- OCR or scanned PDF handling
+- Google Drive import
+- DOCX/TXT generic ingestion beyond the bundle sample path
+- Multi-tenant isolation
+- OAuth
+- Team sharing
+- Long-form fiction tuning as a primary milestone
+- Multi-agent debate beyond one critic-and-revise pass
 
 ## Key decisions
 
-- Implementation language: TypeScript on Node 20+.
-- MCP SDK: official TypeScript MCP server packages.
-- PDF extraction: `pdfjs-dist` for more robust text extraction than `pdf-parse`.
-- Persistence model: local filesystem under `profiles/`.
-- Similarity engine: deterministic heuristic analysis plus optional model-backed rewriting.
-- Rewrite modes:
-  - `rewrite`
-  - `hint`
-  - `snippet`
-- Training/fine-tuning: explicitly out of scope for MVP.
-- Google Drive and non-PDF ingestion: deferred.
-- OCR for scanned PDFs: deferred.
-- Multi-tenant/team sharing: deferred.
-- OAuth: deferred in favor of simple bearer auth.
+- Implementation language: TypeScript on Node 20+
+- SDK direction: official MCP TypeScript server packages
+- Storage: local filesystem under `profiles/`
+- Primary quality path: bundled multi-sample `email-formal` profiles
+- Quality loop ceiling: one draft pass, one structured critique pass, one revision pass
+- Evaluation method: fixed human review set instead of ad hoc spot checks
+- Default model-backed validation path on this machine: OpenAI-compatible endpoint when configured
+- Ollama remains supported, but live validation on this computer is still deferred until a machine with Ollama is available
 
-## Required interfaces
+## Public interfaces
 
 ### MCP tools
 
 - `voice_create_profile`
+- `voice_create_profile_bundle`
 - `voice_list_profiles`
 - `voice_get_profile`
 - `voice_compare_text`
@@ -61,100 +67,112 @@ This MVP is intentionally narrower than a full author-style platform. It is desi
 - `voice://profiles/{voiceId}/guide`
 - `voice://profiles/{voiceId}/metrics`
 
-### Storage layout
+### Output modes
+
+- Rewrite:
+  - `rewrite`
+  - `hint`
+  - `snippet`
+- Quality:
+  - `fast`
+  - `reviewed`
+
+## Storage layout
 
 ```text
 profiles/
   index.json
   <voiceId>/
-    source.pdf
     extracted.txt
     guide.json
     guide.md
+    source.pdf
+    bundle-sources.json
+    samples/
 ```
+
+Notes:
+
+- `source.pdf` is present for legacy single-PDF profiles.
+- `bundle-sources.json` and `samples/` are present for bundled profiles.
+- `guide.json` stores provenance, confidence notes, and marker separation for bundled profiles.
 
 ## What is implemented
 
-### Runtime and packaging
+### Runtime and transport
 
-- TypeScript project scaffold with build, test, stdio, and HTTP scripts.
-- MCP server registration for all planned tools and resources.
-- Native Node HTTP server exposing:
+- TypeScript project scaffold with build, test, stdio, HTTP, and eval scripts
+- MCP server registration for tools and resources
+- HTTP server with:
   - `POST /mcp`
   - `GET /healthz`
-- Docker image for HTTP deployment.
-- `.env.example` and README setup guidance.
-- Local git repository initialized.
+- Structured logging for startup, profile creation, rewrite, generate, and provider fallback paths
+- Docker packaging
 
-### Voice profile pipeline
+### Legacy profile path
 
-- Local PDF validation and extraction.
-- Explicit rejection path for unsupported or non-text PDFs.
-- Extracted-text normalization, token estimation, and hard source limits.
-- Compact voice profile generation with:
-  - style dimensions
-  - structure patterns
-  - lexical markers
-  - rhetorical devices
-  - anti-patterns
-  - compact prompt pack
-- `guide.json` and `guide.md` persistence.
+- Local text-PDF validation and extraction
+- Rejection for non-text or unsupported PDFs
+- Heuristic profile creation from one source PDF
+- Stored `guide.json`, `guide.md`, and `extracted.txt`
 
-### Style compare and rewrite
+### Bundled email-formal profile path
 
-- Deterministic text snapshot generation.
-- Similarity scoring with:
-  - dimension matching
-  - lexical marker overlap
-  - structure-pattern comparison
-  - rhetorical-device overlap
-- Rewrite service with:
-  - provider adapter resolution
-  - heuristic fallback
-  - `rewrite`, `hint`, and `snippet` modes
-- Prompt-to-draft generation service with provider-backed or heuristic output in a selected voice.
-- Before/after similarity reporting.
+- `voice_create_profile_bundle`
+- Validation requiring at least 3 samples
+- Per-sample and combined size limits
+- Support for sample `text` or local `path`
+- Email normalization that strips or downweights:
+  - greetings
+  - signatures
+  - reply headers
+  - one-off routing metadata
+- Cross-sample analysis that separates:
+  - stable lexical markers
+  - topic-specific lexical markers
+  - repeated phrases
+- Model-backed bundle distillation with heuristic fallback
+- Provenance capture and persistence
+- Confidence notes persisted in the profile
 
-### Providers
+### Rewrite and generation process
 
-- Ollama adapter.
-- OpenAI-compatible HTTP adapter.
-- AWS Bedrock adapter.
-- Heuristic fallback provider for offline/local use or provider failure.
+- `voice_rewrite_text` with `qualityMode`
+- `voice_generate_text` with `qualityMode`
+- `reviewed` mode with:
+  - candidate draft
+  - structured critic JSON
+  - one revision pass
+- Heuristic fallback when no model-backed provider is configured or when the provider fails
 
-### Verification
+### Evaluation harness
 
-- Build passes with `npm.cmd run build`.
-- Test suite passes with `npm.cmd test`.
-- Verified scenarios:
-  - create a voice profile from a text PDF
-  - reject scanned/image-only or unreadable PDFs
-  - reject oversized inputs
-  - score stylistically similar text above dissimilar text
-  - rewrite/hint/snippet flows return useful output
-  - HTTP bearer auth blocks unauthenticated access when localhost bypass is disabled
+- Dedicated review area under `evals/email-formal`
+- 4 curated source email samples
+- 3 rewrite cases
+- 3 generation cases
+- Human review rubric
+- `npm run eval:email-formal`
+- Markdown and JSON report output
 
-## Known MVP limitations
+### Verification status
 
-- `voice_create_profile` accepts `providerOverride` for interface compatibility, but profile creation is currently heuristic-first and does not yet use a model refinement pass.
-- Google Drive ingestion is not implemented.
-- DOCX, TXT, and Markdown ingestion are not implemented.
-- OCR is not implemented.
-- Profile merging across multiple source documents is not implemented.
-- The HTTP server is stateless per request and optimized for MVP simplicity rather than advanced session features.
-- The rewrite quality is best when a remote model provider is configured; heuristic mode is intentionally modest.
+- `npm.cmd run build` passes
+- `npm.cmd test` passes
+- `npm.cmd run eval:email-formal` runs locally and produces artifacts
+
+## Known limitations
+
+- The bundled profile path currently supports only `profileType: "email-formal"`.
+- The evaluation harness can run in heuristic mode, but real reviewed-mode quality still depends on a configured model-backed provider.
+- Human scoring thresholds are defined, but a real human acceptance run is still outstanding.
+- Open WebUI, Claude Code, and Codex live smoke tests need to be re-run against this new bundled-profile workflow.
+- The current machine still is not set up for live Ollama-backed validation.
 
 ## Next recommended work
 
-1. Add provider-assisted profile distillation so `voice_create_profile` can optionally refine lexical and tonal rules with an LLM.
-2. Add Google Drive PDF import and profile source provenance for Drive-backed workflows.
-3. Add Open WebUI and Ollama integration notes with example MCP client configs.
-4. Add richer auth configuration and token rotation guidance.
-5. Add snapshot fixtures or end-to-end MCP client smoke tests.
-6. Add profile export/import commands for moving voices between machines.
-7. Add usage guidance around minimum and maximum source sizes to avoid poor voice extraction.
-
-## Notes for future implementation
-
-- If git operations continue to fail because of Windows ownership changes, reconfigure `safe.directory` from the active user context before doing commit/push work.
-- Pushing to GitHub user `timetoady` is not yet configured in this workspace and should be handled as a separate authenticated step.
+1. Run the formal email evaluation harness with an actual OpenAI-compatible endpoint and capture a human-scored report.
+2. Perform live bundled-profile smoke tests in Codex, Claude Code, and Open WebUI.
+3. Add a small set of real-world failure fixtures for overfit, meaning drift, and generic assistant phrasing.
+4. Consider whether the next voice family should be another constrained domain such as executive email or newsletter intro, rather than jumping immediately to long-form fiction.
+5. After process quality is stable, add Google Drive ingestion as a source convenience feature.

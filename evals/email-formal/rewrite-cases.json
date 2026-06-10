@@ -1,0 +1,17 @@
+[
+  {
+    "id": "rewrite-1",
+    "label": "timeline alignment",
+    "text": "Can you tell me if the timeline still works? We need to know soon because the team is planning around it, and I do not want to guess."
+  },
+  {
+    "id": "rewrite-2",
+    "label": "workflow question",
+    "text": "I am trying to understand whether this content should go through the same pipeline as the public articles or if there is a different path for internal-only items."
+  },
+  {
+    "id": "rewrite-3",
+    "label": "meeting follow-up",
+    "text": "Thanks for meeting today. I think we got most of the way there, but I still need clarity on who owns the handoff and what the first delivery actually includes."
+  }
+]

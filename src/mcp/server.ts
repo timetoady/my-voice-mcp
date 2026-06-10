@@ -14,6 +14,8 @@ const providerOverrideSchema = z
   })
   .optional();
 
+const qualityModeSchema = z.enum(["fast", "reviewed"]).optional();
+
 function serializeJson(value: unknown) {
   return JSON.stringify(value, null, 2);
 }
@@ -56,6 +58,46 @@ export function buildMcpServer(service: VoiceService): McpServer {
           summary: result.profile.summary,
           warnings: result.profile.warnings,
           sourceStats: result.profile.sourceStats
+        })
+      );
+    }
+  );
+
+  server.registerTool(
+    "voice_create_profile_bundle",
+    {
+      title: "Create Bundled Voice Profile",
+      description: "Create a formal email voice profile from multiple curated samples.",
+      inputSchema: z.object({
+        voiceName: z.string().min(1),
+        profileType: z.literal("email-formal"),
+        description: z.string().optional(),
+        samples: z.array(z.object({
+          label: z.string().min(1),
+          path: z.string().min(1).optional(),
+          text: z.string().min(1).optional()
+        })).min(3),
+        providerOverride: providerOverrideSchema
+      })
+    },
+    async ({ voiceName, profileType, description, samples, providerOverride }) => {
+      const result = await service.createProfileBundle({
+        voiceName,
+        profileType,
+        description,
+        samples,
+        providerOverride: providerOverride as ProviderConfig | undefined
+      });
+      return textContent(
+        serializeJson({
+          voiceId: result.profile.voiceId,
+          voiceName: result.profile.voiceName,
+          profileType: result.profile.profileType,
+          summary: result.profile.summary,
+          warnings: result.profile.warnings,
+          confidenceNotes: result.profile.confidenceNotes,
+          sourceStats: result.profile.sourceStats,
+          provenance: result.provenance
         })
       );
     }
@@ -115,24 +157,28 @@ export function buildMcpServer(service: VoiceService): McpServer {
         voiceId: z.string().min(1),
         text: z.string().min(1),
         mode: z.enum(["rewrite", "hint", "snippet"]),
+        qualityMode: qualityModeSchema,
         strictness: z.number().min(0).max(1).optional(),
         providerOverride: providerOverrideSchema
       })
     },
-    async ({ voiceId, text, mode, strictness, providerOverride }) => {
+    async ({ voiceId, text, mode, qualityMode, strictness, providerOverride }) => {
       const result = await service.rewriteText({
         voiceId,
         text,
         mode,
+        qualityMode,
         strictness,
         providerOverride: providerOverride as ProviderConfig | undefined
       });
       return textContent(
         serializeJson({
           mode: result.mode,
+          qualityMode: result.qualityMode,
           providerUsed: result.providerUsed,
           similarityBefore: result.similarityBefore.score,
           similarityAfterEstimate: result.similarityAfterEstimate.score,
+          critique: result.critique,
           notes: result.notes,
           outputText: result.outputText
         })
@@ -149,15 +195,17 @@ export function buildMcpServer(service: VoiceService): McpServer {
         voiceId: z.string().min(1),
         prompt: z.string().min(1),
         length: z.enum(["short", "medium", "long"]).optional(),
+        qualityMode: qualityModeSchema,
         strictness: z.number().min(0).max(1).optional(),
         providerOverride: providerOverrideSchema
       })
     },
-    async ({ voiceId, prompt, length, strictness, providerOverride }) => {
+    async ({ voiceId, prompt, length, qualityMode, strictness, providerOverride }) => {
       const result = await service.generateText({
         voiceId,
         prompt,
         length,
+        qualityMode,
         strictness,
         providerOverride: providerOverride as ProviderConfig | undefined
       });
@@ -165,7 +213,9 @@ export function buildMcpServer(service: VoiceService): McpServer {
         serializeJson({
           providerUsed: result.providerUsed,
           length: result.length,
+          qualityMode: result.qualityMode,
           similarityEstimate: result.similarityEstimate.score,
+          critique: result.critique,
           notes: result.notes,
           outputText: result.outputText
         })

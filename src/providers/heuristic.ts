@@ -1,11 +1,18 @@
 import type {
+  ProviderCritiqueRequest,
+  ProviderCritiqueResponse,
+  ProviderEmailBundleDistillationRequest,
+  ProviderEmailBundleDistillationResponse,
   ProviderGenerateRequest,
   ProviderGenerateResponse,
+  ProviderRevisionRequest,
+  ProviderRevisionResponse,
   ProviderRewriteRequest,
   ProviderRewriteResponse,
   RewriteMode,
   VoiceProfile
 } from "../domain/types.js";
+import { compareSnapshot, snapshotText } from "../analysis/style.js";
 import type { ModelProvider } from "./types.js";
 
 function targetSentenceLength(profile: VoiceProfile): number {
@@ -93,12 +100,93 @@ function buildSnippet(profile: VoiceProfile, request: ProviderRewriteRequest): P
 export class HeuristicProvider implements ModelProvider {
   readonly kind = "heuristic";
 
+  async distillEmailBundle(
+    request: ProviderEmailBundleDistillationRequest
+  ): Promise<ProviderEmailBundleDistillationResponse> {
+    const confidenceNotes: string[] = [];
+    if (request.normalizedSamples.length < 4) {
+      confidenceNotes.push("Confidence is moderate because the bundle uses the minimum viable number of email samples.");
+    }
+    if (request.topicSpecificLexicalMarkers.length > request.stableLexicalMarkers.length) {
+      confidenceNotes.push("Topic-specific nouns still outnumber stable markers, so voice transfer may overfit if new prompts stay too close to the source topics.");
+    }
+
+    return {
+      summary: `${request.heuristicSummary} in a polished, work-email register that stays more focused on clear body paragraphs than on greeting or signature ritual.`,
+      voiceRules: [
+        "Lead with the practical point early, then add just enough context to make the request or update feel grounded.",
+        "Keep the tone professional, calm, and collaborative rather than breezy or sales-like.",
+        `Reuse stable markers when natural: ${request.stableLexicalMarkers.slice(0, 6).join(", ") || "measured, professional phrasing"}.`,
+        "Favor body paragraphs with steady sentence rhythm over one-line fragments or overly compressed bullets.",
+        "Close with a practical next step or an offer to discuss, without sounding robotic."
+      ],
+      stableLexicalMarkers: request.stableLexicalMarkers.slice(0, 12),
+      topicSpecificLexicalMarkers: request.topicSpecificLexicalMarkers.slice(0, 12),
+      rhetoricalDevices: request.heuristicRhetoricalDevices,
+      antiPatterns: [
+        ...request.heuristicAntiPatterns,
+        "Avoid copying one-off project nouns into unrelated prompts unless the brief calls for them."
+      ],
+      preferredOpenings: [
+        "I wanted to share",
+        "I am following up",
+        "I wanted to check"
+      ],
+      preferredClosings: [
+        "Happy to discuss further",
+        "Please let me know",
+        "Thank you"
+      ],
+      confidenceNotes
+    };
+  }
+
   async rewrite(request: ProviderRewriteRequest): Promise<ProviderRewriteResponse> {
     return rewriteWithHeuristics(request);
   }
 
   async generate(request: ProviderGenerateRequest): Promise<ProviderGenerateResponse> {
     return generateWithHeuristics(request);
+  }
+
+  async critique(request: ProviderCritiqueRequest): Promise<ProviderCritiqueResponse> {
+    const similarity = compareSnapshot(request.profile, snapshotText(request.candidateText));
+    const leakedMarkers = (request.profile.topicSpecificLexicalMarkers ?? []).filter((marker) =>
+      new RegExp(`\\b${escapeRegExp(marker)}\\b`, "i").test(request.candidateText)
+    );
+    const meaningRisk =
+      request.taskType === "rewrite" && request.sourceText
+        ? inferMeaningRisk(request.sourceText, request.candidateText)
+        : "Low confidence heuristic estimate. Verify intent and factual accuracy during review.";
+
+    return {
+      voiceStrengths: similarity.matchedTraits.slice(0, 4),
+      voiceDrifts: similarity.driftTraits.slice(0, 4),
+      topicLeakage: leakedMarkers.slice(0, 4),
+      meaningRisk,
+      mandatoryFixes: similarity.revisionPriorities.slice(0, 3),
+      optionalImprovements: [
+        "Trim any generic assistant framing that sounds like instructions rather than an email draft.",
+        "Keep the cadence steady and professional instead of over-stylizing."
+      ]
+    };
+  }
+
+  async revise(request: ProviderRevisionRequest): Promise<ProviderRevisionResponse> {
+    const response = rewriteWithHeuristics({
+      profile: request.profile,
+      inputText: request.candidateText,
+      mode: "rewrite",
+      strictness: 0.6,
+      report: compareSnapshot(request.profile, snapshotText(request.candidateText))
+    });
+
+    return {
+      outputText: response.outputText,
+      notes: [
+        "Heuristic revision applied a lightweight cleanup pass from the structured critique."
+      ]
+    };
   }
 }
 
@@ -218,4 +306,21 @@ export function generateWithHeuristics(
     outputText: paragraphs.join("\n\n"),
     notes: ["Heuristic generation used because no remote model provider was configured."]
   };
+}
+
+function inferMeaningRisk(sourceText: string, candidateText: string): string {
+  const sourceWords = sourceText.split(/\s+/).length;
+  const candidateWords = candidateText.split(/\s+/).length;
+  const ratio = candidateWords / Math.max(1, sourceWords);
+  if (ratio < 0.55) {
+    return "Moderate risk: the candidate is much shorter than the source and may have dropped context.";
+  }
+  if (ratio > 1.8) {
+    return "Moderate risk: the candidate expands well beyond the source and may have added unsupported detail.";
+  }
+  return "Low to moderate risk: heuristic review did not detect a strong length-based meaning shift.";
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

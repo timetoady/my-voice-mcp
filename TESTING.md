@@ -1,72 +1,242 @@
 # Testing My Voice MCP
 
-This guide is the practical MVP test path. If all sections marked "MVP required" work, we can reasonably call the project a usable MVP.
+Last updated: June 10, 2026
 
-## What is being tested
+This guide is the current step-by-step MVP validation path. The main thing we are validating now is not just whether the MCP connects, but whether the bundled formal-email process is good enough to reduce real editing work.
 
-There are two separate layers:
+## Primary workflow to validate
 
-1. MCP client connection
-   - Codex
-   - Claude Code
-   - Open WebUI
-2. Rewrite backend
-   - heuristic fallback
-   - Ollama
-   - OpenAI-compatible endpoint
-   - Bedrock
+1. Create a bundled `email-formal` voice profile from at least 3 real email samples.
+2. Rewrite existing text in that voice with `qualityMode: "reviewed"`.
+3. Generate new text in that voice with `qualityMode: "reviewed"`.
+4. Compare `fast` versus `reviewed` on the fixed review set.
+5. Run human review scoring on the outputs.
 
-Ollama is not the MCP client here. It is a model backend used by `my-voice-mcp` when rewriting text.
-
-## Core user flows for MVP
-
-The MVP should support all three of these:
-
-1. Create a voice guide from a source PDF.
-2. Rewrite existing text into the selected voice.
-3. Generate new content from a prompt in the selected voice.
+Client setup for Codex, Claude Code, and Open WebUI still matters, but it is a delivery check after the process-quality pass.
 
 ## Prerequisites
 
-- Node 20+ installed.
-- Dependencies installed with `npm install --no-audit --no-fund`.
-- Project built with `npm run build`.
-- A text-based sample PDF ready for ingestion.
+- Node 20+ installed
+- Dependencies installed with `npm install --no-audit --no-fund`
+- Project built with `npm run build`
+- Automated tests passing with `npm test`
+- A configured model-backed provider if you want true reviewed-mode quality on this machine
 
-Optional but recommended:
+Recommended for this computer:
 
-- Ollama installed and running if you want to test local model-backed rewriting.
-- Open WebUI running if you want to test HTTP MCP integration.
-- Claude Code installed if you want to test Anthropic’s MCP client.
-- Codex CLI or Codex app access if you want to test OpenAI’s MCP client.
+- OpenAI-compatible endpoint configured through:
+  - `MY_VOICE_PROVIDER=openai-compatible`
+  - `MY_VOICE_BASE_URL=<base-url>`
+  - `MY_VOICE_MODEL=<model>`
+  - `MY_VOICE_API_KEY=<token-if-needed>`
+
+Still deferred on this computer:
+
+- live Ollama validation
+
+## Provider and endpoint setup
+
+### What the repo actually supports
+
+Implemented in code:
+
+- `openai-compatible`
+- `ollama`
+- `bedrock`
+
+Documented compatibility candidates through the existing `openai-compatible` adapter:
+
+- Gemini
+- Claude
+
+This means Gemini and Claude can be configured here if their OpenAI-style compatibility endpoints fit the repo's current expectations, but they are not separate first-class provider kinds in `ProviderKind`.
+
+### Generic OpenAI-compatible endpoint
+
+Use this for any hosted or local service that accepts OpenAI-style chat completions.
+
+```powershell
+$env:MY_VOICE_PROVIDER="openai-compatible"
+$env:MY_VOICE_BASE_URL="https://your-endpoint.example/v1"
+$env:MY_VOICE_MODEL="your-model"
+$env:MY_VOICE_API_KEY="your-token"
+```
+
+### Gemini compatibility example
+
+```powershell
+$env:MY_VOICE_PROVIDER="openai-compatible"
+$env:MY_VOICE_BASE_URL="https://generativelanguage.googleapis.com/v1beta/openai/"
+$env:MY_VOICE_MODEL="gemini-3.5-flash"
+$env:MY_VOICE_API_KEY="<your-gemini-api-key>"
+```
+
+### Claude compatibility example
+
+```powershell
+$env:MY_VOICE_PROVIDER="openai-compatible"
+$env:MY_VOICE_BASE_URL="https://api.anthropic.com/v1/"
+$env:MY_VOICE_MODEL="claude-sonnet-4-5"
+$env:MY_VOICE_API_KEY="<your-claude-api-key>"
+```
+
+Important note:
+
+- Anthropic documents this as an OpenAI SDK compatibility layer, not the full native Claude API surface.
+- In this repo, that makes Claude a compatibility-path option, not native first-class provider support.
+
+### Native Bedrock provider path
+
+```powershell
+$env:MY_VOICE_PROVIDER="bedrock"
+$env:MY_VOICE_MODEL="<bedrock-model-id>"
+$env:MY_VOICE_BEDROCK_REGION="us-east-1"
+```
+
+### Bedrock through an OpenAI-compatible endpoint
+
+If you want to point the repo at Bedrock's OpenAI-compatible endpoint instead of using the repo's native Bedrock provider:
+
+```powershell
+$env:MY_VOICE_PROVIDER="openai-compatible"
+$env:MY_VOICE_BASE_URL="https://bedrock-mantle.us-east-1.api.aws/v1"
+$env:MY_VOICE_MODEL="<bedrock-openai-compatible-model>"
+$env:MY_VOICE_API_KEY="<bedrock-api-key>"
+```
+
+### First-class local path: Ollama
+
+```powershell
+$env:MY_VOICE_PROVIDER="ollama"
+$env:MY_VOICE_BASE_URL="http://localhost:11434"
+$env:MY_VOICE_MODEL="qwen3-coder"
+```
+
+### Secondary local path: another OpenAI-compatible server
+
+```powershell
+$env:MY_VOICE_PROVIDER="openai-compatible"
+$env:MY_VOICE_BASE_URL="http://127.0.0.1:8000/v1"
+$env:MY_VOICE_MODEL="your-local-model"
+$env:MY_VOICE_API_KEY="local-token-or-placeholder"
+```
+
+## Local LLM setup steps
+
+### Ollama workflow
+
+1. Install Ollama.
+2. Pull a local model:
+
+```powershell
+ollama pull qwen3-coder
+```
+
+3. Confirm the service is responding:
+
+```powershell
+curl http://localhost:11434/api/tags
+```
+
+4. Set env vars:
+
+```powershell
+$env:MY_VOICE_PROVIDER="ollama"
+$env:MY_VOICE_BASE_URL="http://localhost:11434"
+$env:MY_VOICE_MODEL="qwen3-coder"
+```
+
+5. Build and start:
+
+```powershell
+npm.cmd run build
+node dist/index.js stdio
+```
+
+6. Run one bundled-profile rewrite or generate test through your MCP client.
+
+### Another local OpenAI-compatible server
+
+1. Start the server.
+2. Verify its OpenAI-style endpoint:
+
+```powershell
+curl http://127.0.0.1:8000/v1/models
+```
+
+3. Set env vars for `openai-compatible`.
+4. Run:
+
+```powershell
+npm.cmd run build
+node dist/index.js stdio
+```
+
+5. Run one rewrite or generate smoke test.
 
 ## Local verification first
 
-Run these from the repo root:
+Run these commands from the repo root:
 
 ```powershell
 npm.cmd run build
 npm.cmd test
+npm.cmd run eval:email-formal
 ```
 
 Expected result:
 
-- Build succeeds.
-- Test suite passes.
+- build succeeds
+- tests pass
+- `evals/email-formal/output/latest-report.md`
+- `evals/email-formal/output/latest-report.json`
 
-## Start the server
+## Formal-email evaluation harness
 
-### Option A: stdio server
+The fixed review set lives in `evals/email-formal/`.
 
-Use this for Codex and Claude Code local-process testing.
+It includes:
+
+- bundled source samples under `samples/`
+- 3 rewrite cases
+- 3 generation cases
+- a human review rubric
+
+### Run the harness
+
+```powershell
+npm.cmd run eval:email-formal
+```
+
+### What the harness does
+
+1. creates a bundled `email-formal` profile
+2. runs each rewrite case in `fast` mode
+3. runs each rewrite case in `reviewed` mode
+4. runs each generation case in `fast` mode
+5. runs each generation case in `reviewed` mode
+6. writes report artifacts for human scoring
+
+### Human acceptance target
+
+- average at least 4/5 for voice match
+- average at least 4/5 for usefulness with fewer manual edits
+- no case below 3/5 on correctness
+- reviewed mode should outperform fast mode in at least 4 of 6 total tasks
+
+## Start the MCP server
+
+### Option A: stdio
+
+Use this for Codex or Claude Code local-process testing.
 
 ```powershell
 node dist/index.js stdio
 ```
 
-### Option B: HTTP server
+### Option B: HTTP
 
-Use this for Open WebUI and any HTTP MCP client.
+Use this for Open WebUI or another Streamable HTTP MCP client.
 
 ```powershell
 $env:MY_VOICE_HTTP_BEARER_TOKEN="change-me"
@@ -82,40 +252,104 @@ curl http://127.0.0.1:3000/healthz
 
 Expected result:
 
-- JSON response with `ok: true`.
+- JSON with `ok: true`
 
-## Test a real voice profile
+## Recommended live test flow
 
-Use a real PDF with extractable text. The MVP rejects scanned/image PDFs.
+### Step 1: configure a model-backed provider
 
-Suggested sample workflow:
+Example for an OpenAI-compatible endpoint:
 
-1. Create a profile named `email-formal` from a short but representative PDF.
-2. Compare a paragraph you wrote recently.
-3. Run all three rewrite modes:
-   - `rewrite`
-   - `hint`
-   - `snippet`
-4. Generate a fresh draft from a prompt using the same voice.
+```powershell
+$env:MY_VOICE_PROVIDER="openai-compatible"
+$env:MY_VOICE_BASE_URL="https://your-endpoint.example/v1"
+$env:MY_VOICE_MODEL="your-model"
+$env:MY_VOICE_API_KEY="your-token"
+```
 
-Success criteria:
+Then build and start the server:
 
-- The profile creates successfully.
-- Similarity score is returned.
-- Rewrite output preserves meaning while shifting style.
-- Prompt generation produces original content that still matches the selected voice.
+```powershell
+npm.cmd run build
+node dist/index.js stdio
+```
 
-## Codex setup and test
+If you are testing a local OpenAI-compatible server instead, keep the same pattern and only swap `MY_VOICE_BASE_URL`, `MY_VOICE_MODEL`, and `MY_VOICE_API_KEY` as needed.
 
-MVP required: yes
+### Step 2: create a bundled profile
 
-Codex supports MCP servers through `config.toml`, and its CLI/IDE share that configuration according to OpenAI’s Codex MCP docs:
-- [OpenAI Codex MCP docs](https://developers.openai.com/codex/mcp)
-- [OpenAI Docs MCP quickstart](https://developers.openai.com/learn/docs-mcp)
+Use `voice_create_profile_bundle` with at least 3 email samples. Each sample can supply:
 
-### Codex stdio setup
+- `text`
+- or local `path`
 
-Add a server with the CLI:
+Input shape:
+
+```json
+{
+  "voiceName": "formal-email",
+  "profileType": "email-formal",
+  "description": "My work email voice",
+  "samples": [
+    { "label": "sample-1", "text": "..." },
+    { "label": "sample-2", "text": "..." },
+    { "label": "sample-3", "text": "..." }
+  ]
+}
+```
+
+Success checks:
+
+- tool returns a `voiceId`
+- warnings are understandable
+- `confidenceNotes` are present when useful
+- `guide.json` shows stable markers separately from topic-specific ones
+
+### Step 3: test rewrite in reviewed mode
+
+Use `voice_rewrite_text` with:
+
+```json
+{
+  "voiceId": "<voice-id>",
+  "text": "Can you tell me if the timeline still works? We need to know soon.",
+  "mode": "rewrite",
+  "qualityMode": "reviewed"
+}
+```
+
+Success checks:
+
+- output preserves meaning
+- tone feels closer to the source voice
+- `critique` is returned
+- output sounds like an email draft, not prompt instructions
+
+### Step 4: test generation in reviewed mode
+
+Use `voice_generate_text` with:
+
+```json
+{
+  "voiceId": "<voice-id>",
+  "prompt": "Draft an email on top-level takeaways from AI Con with ideas about generate-and-score, critique personas, and automating boring important work.",
+  "length": "medium",
+  "qualityMode": "reviewed"
+}
+```
+
+Success checks:
+
+- output reads like a real email
+- content stays on brief
+- voice feels like the bundled samples
+- `providerUsed` reports the expected model-backed provider
+
+## Codex setup
+
+Codex supports MCP servers through `config.toml` or the CLI.
+
+### Add the stdio server
 
 ```powershell
 codex mcp add my-voice -- node C:\Users\adamandreason\Documents\gitRepos\my-voice-mcp\dist\index.js stdio
@@ -127,7 +361,7 @@ Verify:
 codex mcp list
 ```
 
-Alternative `~/.codex/config.toml` snippet:
+### Alternative config
 
 ```toml
 [mcp_servers.my-voice]
@@ -136,51 +370,21 @@ args = ["C:/Users/adamandreason/Documents/gitRepos/my-voice-mcp/dist/index.js", 
 cwd = "C:/Users/adamandreason/Documents/gitRepos/my-voice-mcp"
 ```
 
-### Codex HTTP setup
-
-If you prefer HTTP:
-
-```toml
-[mcp_servers.my-voice]
-url = "http://127.0.0.1:3000/mcp"
-```
-
-If you disable localhost bypass and require a bearer token:
-
-```toml
-[mcp_servers.my-voice]
-url = "http://127.0.0.1:3000/mcp"
-bearer_token_env_var = "MY_VOICE_HTTP_BEARER_TOKEN"
-```
-
 ### Codex smoke test prompt
 
-Once the server is loaded in Codex:
-
 ```text
-Use the my-voice MCP server to validate a source PDF, create a voice profile named "email-formal", compare this paragraph to that profile, then rewrite it in hint mode.
+Use the my-voice MCP server to create a bundled email-formal profile from my three sample emails, then rewrite this email in reviewed mode and tell me the similarity score before and after.
 ```
-
-Expected result:
-
-- Codex sees the tools.
-- The tool calls succeed.
-- Returned JSON/text includes the profile id, similarity score, and rewrite hints.
 
 Then test generation:
 
 ```text
-Use the my-voice MCP server to generate a short welcome email in the "email-formal" voice profile from this prompt: "Welcome a new donor and thank them for supporting the project."
+Use the my-voice MCP server to generate an email in that same voice about top-level takeaways from AI Con. Use reviewed mode.
 ```
 
-## Claude Code setup and test
+## Claude Code setup
 
-MVP required: yes
-
-Claude Code’s current MCP docs support both HTTP and stdio transports:
-- [Claude Code MCP docs](https://code.claude.com/docs/en/mcp)
-
-### Claude stdio setup
+### Add stdio transport
 
 ```powershell
 claude mcp add --transport stdio my-voice -- node C:\Users\adamandreason\Documents\gitRepos\my-voice-mcp\dist\index.js stdio
@@ -193,7 +397,7 @@ claude mcp list
 claude mcp get my-voice
 ```
 
-### Claude HTTP setup
+### Add HTTP transport
 
 ```powershell
 claude mcp add --transport http my-voice http://127.0.0.1:3000/mcp
@@ -205,186 +409,128 @@ If bearer auth is required:
 claude mcp add --transport http my-voice http://127.0.0.1:3000/mcp --header "Authorization: Bearer change-me"
 ```
 
-### Claude smoke test
-
-Inside Claude Code, use:
+### Claude smoke test prompt
 
 ```text
-Use the my-voice MCP tools to create a profile from my sample PDF, compare this draft to that profile, and give me a snippet-mode rewrite.
+Use the my-voice MCP tools to create a bundled email-formal profile from three real samples, then rewrite this draft in reviewed mode and show the critique fields.
 ```
 
-Then test:
+## Open WebUI setup
 
-```text
-Use the my-voice MCP tools to generate a medium-length introduction in that same voice from this prompt: "Introduce a reflective weekly update about creative work and patience."
+Open WebUI uses the HTTP server path.
+
+### Start the server
+
+```powershell
+$env:MY_VOICE_HTTP_BEARER_TOKEN="change-me"
+$env:MY_VOICE_HTTP_ALLOW_UNAUTH_LOCALHOST="true"
+node dist/index.js http
 ```
 
-Check `/mcp` if the server does not appear connected.
+### Add the server in Open WebUI
 
-## Open WebUI setup and test
-
-MVP required: yes for one HTTP client path
-
-Open WebUI’s MCP docs currently say to add MCP servers under Admin Settings → External Tools using Type `MCP (Streamable HTTP)`:
-- [Open WebUI MCP docs](https://docs.openwebui.com/features/extensibility/mcp/)
-- [Open WebUI FAQ on host access from Docker](https://docs.openwebui.com/faq/)
-
-### Important networking note
-
-If Open WebUI runs in Docker and `my-voice-mcp` runs on the host, your HTTP server must listen on `0.0.0.0`, not only `127.0.0.1`.
-
-The default `.env.example` already uses:
-
-```text
-MY_VOICE_HOST=0.0.0.0
-```
-
-### Open WebUI steps
-
-1. Start `my-voice-mcp` in HTTP mode.
-2. Open Open WebUI as an admin.
-3. Go to `Admin Settings -> External Tools`.
-4. Click `Add Server`.
-5. Set `Type` to `MCP (Streamable HTTP)`.
-6. Set URL to:
-   - `http://host.docker.internal:3000/mcp` if Open WebUI is in Docker on Windows/macOS
-   - or another reachable host/IP for your setup
-7. Set Auth:
-   - `None` if using localhost/dev bypass
+1. Open Open WebUI as an admin.
+2. Go to `Admin Settings -> External Tools`.
+3. Choose `Add Server`.
+4. Set `Type` to `MCP (Streamable HTTP)`.
+5. Set `URL` to:
+   - `http://host.docker.internal:3000/mcp` if Open WebUI runs in Docker on Windows/macOS
+   - or another reachable host/IP for your environment
+6. Set auth:
+   - `None` for localhost/dev bypass
    - `Bearer` if your server requires a token
-8. Save.
-9. Open a chat and enable the tool from `+ -> Integrations -> Tools`.
+7. Save and enable the tool in chat.
 
-### Open WebUI smoke test
-
-Ask the model:
+### Open WebUI smoke test prompt
 
 ```text
-Use the my-voice tool to compare this paragraph against the email-formal voice profile and return a rewrite.
+Use the my-voice tool to create a bundled formal email profile from these samples, then generate a reviewed-mode email in that voice asking for quick feedback on a proposal.
 ```
 
-Then ask:
+## Ollama backend setup
 
-```text
-Use the my-voice tool to generate a short announcement in the email-formal voice profile from this prompt: "Announce that the next newsletter will include a behind-the-scenes essay."
-```
+Supported, but still deferred on this computer until Ollama is available locally.
 
-Expected result:
-
-- Tool is available in the chat.
-- Tool invocation succeeds.
-- The response includes transformed text.
-
-## Ollama backend setup and test
-
-MVP required: yes for one local-model-backed rewrite path
-
-Ollama’s docs confirm:
-- local API base URL defaults to `http://localhost:11434/api`
-- Anthropic-compatible mode can be used by tools like Claude Code
-- [Ollama API intro](https://docs.ollama.com/api/introduction)
-- [Ollama Anthropic compatibility](https://docs.ollama.com/api/anthropic-compatibility)
-
-### Start Ollama
-
-Make sure Ollama is running and a model is available:
-
-```powershell
-ollama list
-```
-
-If needed:
-
-```powershell
-ollama pull qwen3-coder
-```
-
-### Run my-voice-mcp against Ollama
-
-For stdio or HTTP mode, set:
+When a machine with Ollama is available:
 
 ```powershell
 $env:MY_VOICE_PROVIDER="ollama"
 $env:MY_VOICE_BASE_URL="http://localhost:11434"
 $env:MY_VOICE_MODEL="qwen3-coder"
-```
-
-Then start the server:
-
-```powershell
 node dist/index.js stdio
 ```
 
-or
-
-```powershell
-node dist/index.js http
-```
-
-### Ollama-backed smoke test
-
-Create a profile, then run `voice_rewrite_text` in `rewrite` mode.
-
-Also run `voice_generate_text` with a short prompt.
-
-Success criteria:
-
-- `providerUsed` should be `ollama` if the request succeeds.
-- The rewrite should be stronger than the heuristic fallback.
-- The generated content should also report `providerUsed: ollama`.
-
-## Suggested real-world MVP test sequence
-
-Run this in order:
-
-1. `npm run build`
-2. `npm test`
-3. Start stdio server and test in Codex
-4. Start stdio or HTTP server and test in Claude Code
-5. Start HTTP server and test in Open WebUI
-6. Repeat one of the above with Ollama configured as the rewrite backend
-7. Repeat one of the above with `voice_generate_text`
-8. Record quirks and update `TESTING.md`
-
-If all seven steps work, this is a real testable MVP.
+Then repeat the same bundled-profile rewrite and generation tests.
 
 ## If something fails
 
-### Build/test failure
+### Build or test failure
 
-- Re-run `npm install --no-audit --no-fund`
-- Re-run `npm run build`
-- Re-run `npm test`
+- re-run `npm install --no-audit --no-fund`
+- re-run `npm run build`
+- re-run `npm test`
 
-### PDF is rejected
+### Bundle creation is rejected
 
-- Confirm it is a text PDF, not scanned/image-only
-- Try a shorter, cleaner sample
+- confirm there are at least 3 samples
+- confirm each sample has real body text, not mostly greeting/signature
+- shorten oversized samples
+
+### Reviewed mode falls back to fast
+
+- confirm a model-backed provider is configured
+- confirm `MY_VOICE_PROVIDER` is not `none`
+- check the logs for provider or JSON-parsing failures
+
+### Wrong base URL shape
+
+- confirm the base URL includes the provider's OpenAI-style root, not a docs URL or browser console URL
+- for Gemini, use `https://generativelanguage.googleapis.com/v1beta/openai/`
+- for Anthropic compatibility, use `https://api.anthropic.com/v1/`
+- for local OpenAI-style servers, confirm whether the server expects `/v1`
+
+### Auth mismatch
+
+- confirm the token type matches the endpoint you chose
+- do not reuse an OpenAI key against Gemini, Claude, or Bedrock endpoints
+- if the local OpenAI-style server ignores auth, still pass a placeholder only if the server tolerates it
+
+### Model naming mismatch
+
+- confirm the model name is valid for that specific endpoint
+- do not assume model names transfer across providers
+- if the provider has a `models` endpoint, query it first
+
+### JSON critique parsing failure
+
+- reviewed mode depends on the provider returning machine-readable critique output
+- if a provider returns malformed JSON, the service may warn and degrade to a simpler path
+- inspect logs for provider failure details before assuming the prompt logic is wrong
+
+### HTTP auth problems
+
+- confirm the bearer token matches `MY_VOICE_HTTP_BEARER_TOKEN`
+- if testing locally, temporarily use `MY_VOICE_HTTP_ALLOW_UNAUTH_LOCALHOST=true`
 
 ### Open WebUI cannot reach the server
 
-- Confirm the server is running on `0.0.0.0`
-- Confirm the URL is reachable from the container
-- Try `host.docker.internal` on Docker Desktop
+- confirm the server is listening on `0.0.0.0`
+- confirm the URL is reachable from the container or host
+- try `host.docker.internal` on Docker Desktop
 
-### Bearer auth issues
+## Reference docs
 
-- Confirm the token passed by the client exactly matches `MY_VOICE_HTTP_BEARER_TOKEN`
-- If testing locally, temporarily use `MY_VOICE_HTTP_ALLOW_UNAUTH_LOCALHOST=true`
-
-### Ollama rewrite does not trigger
-
-- Confirm:
-  - `MY_VOICE_PROVIDER=ollama`
-  - `MY_VOICE_BASE_URL=http://localhost:11434`
-  - `MY_VOICE_MODEL=<installed-model>`
-- Confirm Ollama is running and the model exists with `ollama list`
+- Gemini OpenAI compatibility: [Google AI for Developers](https://ai.google.dev/gemini-api/docs/openai)
+- Claude OpenAI SDK compatibility: [Anthropic](https://docs.anthropic.com/en/api/openai-sdk)
+- Bedrock OpenAI-compatible APIs: [AWS API compatibility](https://docs.aws.amazon.com/bedrock/latest/userguide/models-api-compatibility.html)
+- Bedrock Mantle endpoint: [AWS Responses API docs](https://docs.aws.amazon.com/bedrock/latest/userguide/bedrock-mantle.html)
 
 ## Current status
 
-As of the current repo state:
+As of June 10, 2026:
 
-- Automated tests pass
-- The server can be built locally
-- The docs now define the live client smoke-test path
-- Real interactive client smoke tests still need to be performed and checked off in `TODO.md`
+- build passes
+- tests pass
+- `npm run eval:email-formal` runs locally
+- bundled formal-email workflow is implemented
+- live client validation and human acceptance scoring still remain
