@@ -1,5 +1,11 @@
 import { ProviderConfigurationError } from "../domain/errors.js";
-import type { ProviderConfig, ProviderRewriteRequest, ProviderRewriteResponse } from "../domain/types.js";
+import type {
+  ProviderConfig,
+  ProviderGenerateRequest,
+  ProviderGenerateResponse,
+  ProviderRewriteRequest,
+  ProviderRewriteResponse
+} from "../domain/types.js";
 import type { ModelProvider } from "./types.js";
 
 function buildPrompt(request: ProviderRewriteRequest): { system: string; user: string } {
@@ -62,6 +68,58 @@ export class OpenAICompatibleProvider implements ModelProvider {
     return {
       outputText: payload.choices?.[0]?.message?.content?.trim() ?? request.inputText,
       notes: [`Rewritten using model ${this.config.model}.`]
+    };
+  }
+
+  async generate(request: ProviderGenerateRequest): Promise<ProviderGenerateResponse> {
+    if (!this.config.baseUrl || !this.config.model) {
+      throw new ProviderConfigurationError(
+        "OpenAI-compatible provider requires MY_VOICE_BASE_URL and MY_VOICE_MODEL."
+      );
+    }
+
+    const response = await fetch(`${this.config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(this.config.apiKey ? { authorization: `Bearer ${this.config.apiKey}` } : {})
+      },
+      body: JSON.stringify({
+        model: this.config.model,
+        temperature: Math.max(0, Math.min(1, request.strictness)),
+        messages: [
+          {
+            role: "system",
+            content: [
+              request.profile.compactPromptPack.systemSummary,
+              ...request.profile.compactPromptPack.voiceRules.map((rule) => `Rule: ${rule}`),
+              ...request.profile.compactPromptPack.antiPatterns.map((rule) => `Avoid: ${rule}`)
+            ].join("\n")
+          },
+          {
+            role: "user",
+            content: [
+              `Generate ${request.length} original prose in the target voice.`,
+              "Use the prompt as the content brief while preserving the profile's flavor and diction.",
+              "",
+              request.prompt
+            ].join("\n")
+          }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI-compatible request failed with ${response.status} ${response.statusText}`);
+    }
+
+    const payload = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+
+    return {
+      outputText: payload.choices?.[0]?.message?.content?.trim() ?? request.prompt,
+      notes: [`Generated using model ${this.config.model}.`]
     };
   }
 }

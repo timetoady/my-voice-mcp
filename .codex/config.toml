@@ -1,0 +1,7 @@
+[mcp_servers.my_voice]
+command = "node"
+args = ["dist/index.js", "stdio"]
+cwd = ".."
+startup_timeout_sec = 20
+tool_timeout_sec = 120
+required = false

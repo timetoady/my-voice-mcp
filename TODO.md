@@ -10,10 +10,12 @@
 - [x] Add automated tests for profile creation, validation, compare, rewrite, and HTTP auth.
 - [x] Add requirements tracker in `REQUIREMENTS.md`.
 - [x] Add step-by-step testing and client setup guide in `TESTING.md`.
+- [x] Add prompt-to-new-content generation in a selected voice.
+- [x] Create GitHub repo under `timetoady` and push the initial baseline.
+- [x] Register `my_voice` in local Codex MCP config on this machine.
 
 ## Next up
 
-- [ ] Create GitHub repo under `timetoady` and push the initial commit.
 - [ ] Run a real Codex MCP smoke test against this repo’s built server.
 - [ ] Run a real Claude Code MCP smoke test against this repo’s built server.
 - [ ] Run a real Open WebUI HTTP MCP smoke test against this repo’s server.
@@ -28,6 +30,7 @@
 - [ ] Create a voice profile from a real sample PDF.
 - [ ] Compare a sample paragraph and confirm the similarity report looks reasonable.
 - [ ] Rewrite the same paragraph in `rewrite`, `hint`, and `snippet` modes.
+- [ ] Generate new content from a prompt in the selected voice.
 - [ ] Verify one local stdio client path works end-to-end.
 - [ ] Verify one HTTP MCP client path works end-to-end.
 - [ ] Verify one remote/local model backend path works end-to-end.

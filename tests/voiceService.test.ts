@@ -121,3 +121,24 @@ test("rewrites text in each mode and improves or preserves similarity", async ()
     assert.ok(result.similarityAfterEstimate.score >= result.similarityBefore.score || mode === "snippet");
   }
 });
+
+test("generates new content in a selected voice", async () => {
+  const { service, tempDir } = await buildService();
+  const pdfPath = path.join(tempDir, "voice.pdf");
+  const pdf = await createTextPdf([
+    "The prose is calm, descriptive, and lightly formal.",
+    "It stretches the sentence just enough to hold a secondary thought.",
+    "Every shift is deliberate rather than flashy."
+  ]);
+  await writeFile(pdfPath, pdf);
+  const profile = await service.createProfile({ voiceName: "Calm", pdfPath });
+
+  const result = await service.generateText({
+    voiceId: profile.profile.voiceId,
+    prompt: "Write a short welcome note for a thoughtful newsletter audience.",
+    length: "short"
+  });
+
+  assert.ok(result.outputText.length > 0);
+  assert.ok(result.similarityEstimate.score > 0);
+});

@@ -141,6 +141,39 @@ export function buildMcpServer(service: VoiceService): McpServer {
   );
 
   server.registerTool(
+    "voice_generate_text",
+    {
+      title: "Generate In Voice",
+      description: "Generate original content from a prompt in the selected voice profile.",
+      inputSchema: z.object({
+        voiceId: z.string().min(1),
+        prompt: z.string().min(1),
+        length: z.enum(["short", "medium", "long"]).optional(),
+        strictness: z.number().min(0).max(1).optional(),
+        providerOverride: providerOverrideSchema
+      })
+    },
+    async ({ voiceId, prompt, length, strictness, providerOverride }) => {
+      const result = await service.generateText({
+        voiceId,
+        prompt,
+        length,
+        strictness,
+        providerOverride: providerOverride as ProviderConfig | undefined
+      });
+      return textContent(
+        serializeJson({
+          providerUsed: result.providerUsed,
+          length: result.length,
+          similarityEstimate: result.similarityEstimate.score,
+          notes: result.notes,
+          outputText: result.outputText
+        })
+      );
+    }
+  );
+
+  server.registerTool(
     "voice_delete_profile",
     {
       title: "Delete Voice Profile",

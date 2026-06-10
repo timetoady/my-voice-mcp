@@ -110,6 +110,18 @@ export interface ProviderRewriteResponse {
   notes: string[];
 }
 
+export interface ProviderGenerateRequest {
+  profile: VoiceProfile;
+  prompt: string;
+  strictness: number;
+  length: "short" | "medium" | "long";
+}
+
+export interface ProviderGenerateResponse {
+  outputText: string;
+  notes: string[];
+}
+
 export interface CreateProfileResult {
   profile: VoiceProfile;
   guideMarkdown: string;
@@ -138,4 +150,13 @@ export interface RewriteResult {
   notes: string[];
   mode: RewriteMode;
   providerUsed: ProviderKind | "heuristic";
+}
+
+export interface GenerateResult {
+  profile: VoiceProfile;
+  outputText: string;
+  notes: string[];
+  providerUsed: ProviderKind | "heuristic";
+  similarityEstimate: SimilarityReport;
+  length: "short" | "medium" | "long";
 }

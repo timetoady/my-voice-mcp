@@ -14,6 +14,7 @@ This MVP is intentionally narrower than a full author-style platform. It is desi
 - One source PDF per voice profile.
 - Text-based PDFs only.
 - English-language prose as the default target.
+- Existing-text rewrite plus prompt-to-draft generation.
 - Local `stdio` transport for MCP clients.
 - Streamable HTTP transport for remote/containerized clients.
 - Bearer-token HTTP auth, with optional localhost dev bypass.
@@ -49,6 +50,7 @@ This MVP is intentionally narrower than a full author-style platform. It is desi
 - `voice_get_profile`
 - `voice_compare_text`
 - `voice_rewrite_text`
+- `voice_generate_text`
 - `voice_delete_profile`
 - `voice_validate_source`
 
@@ -110,6 +112,7 @@ profiles/
   - provider adapter resolution
   - heuristic fallback
   - `rewrite`, `hint`, and `snippet` modes
+- Prompt-to-draft generation service with provider-backed or heuristic output in a selected voice.
 - Before/after similarity reporting.
 
 ### Providers

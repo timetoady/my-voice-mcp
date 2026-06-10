@@ -3,6 +3,7 @@ import type { AppConfig } from "../config.js";
 import type {
   CompareResult,
   CreateProfileResult,
+  GenerateResult,
   SimilarityReport,
   ProviderConfig,
   RewriteMode,
@@ -176,6 +177,72 @@ export class VoiceService {
       notes,
       mode: params.mode,
       providerUsed
+    };
+  }
+
+  async generateText(params: {
+    voiceId: string;
+    prompt: string;
+    length?: "short" | "medium" | "long";
+    strictness?: number;
+    providerOverride?: ProviderConfig;
+  }): Promise<GenerateResult> {
+    const profile = await this.store.getProfile(params.voiceId);
+    const provider = this.resolveProvider(params.providerOverride);
+    const strictness = params.strictness ?? 0.55;
+    const length = params.length ?? "medium";
+
+    let providerUsed: GenerateResult["providerUsed"] = provider.kind as GenerateResult["providerUsed"];
+    let outputText = params.prompt;
+    let notes: string[] = [];
+
+    try {
+      const response = await provider.generate({
+        profile,
+        prompt: params.prompt,
+        strictness,
+        length
+      });
+      outputText = response.outputText;
+      notes = response.notes;
+    } catch (error) {
+      this.appLogger.warn("generate.provider_failed", {
+        voiceId: params.voiceId,
+        provider: provider.kind,
+        message: error instanceof Error ? error.message : String(error)
+      });
+
+      const heuristic = new HeuristicProvider();
+      const response = await heuristic.generate({
+        profile,
+        prompt: params.prompt,
+        strictness,
+        length
+      });
+      outputText = response.outputText;
+      notes = [
+        ...(response.notes ?? []),
+        `Provider fallback triggered after ${provider.kind} failed.`
+      ];
+      providerUsed = "heuristic";
+    }
+
+    const similarityEstimate = compareSnapshot(profile, snapshotText(outputText));
+
+    this.appLogger.info("generate.completed", {
+      voiceId: params.voiceId,
+      providerUsed,
+      length,
+      similarityEstimate: similarityEstimate.score
+    });
+
+    return {
+      profile,
+      outputText,
+      notes,
+      providerUsed,
+      similarityEstimate,
+      length
     };
   }
 

@@ -18,6 +18,14 @@ There are two separate layers:
 
 Ollama is not the MCP client here. It is a model backend used by `my-voice-mcp` when rewriting text.
 
+## Core user flows for MVP
+
+The MVP should support all three of these:
+
+1. Create a voice guide from a source PDF.
+2. Rewrite existing text into the selected voice.
+3. Generate new content from a prompt in the selected voice.
+
 ## Prerequisites
 
 - Node 20+ installed.
@@ -88,12 +96,14 @@ Suggested sample workflow:
    - `rewrite`
    - `hint`
    - `snippet`
+4. Generate a fresh draft from a prompt using the same voice.
 
 Success criteria:
 
 - The profile creates successfully.
 - Similarity score is returned.
 - Rewrite output preserves meaning while shifting style.
+- Prompt generation produces original content that still matches the selected voice.
 
 ## Codex setup and test
 
@@ -157,6 +167,12 @@ Expected result:
 - The tool calls succeed.
 - Returned JSON/text includes the profile id, similarity score, and rewrite hints.
 
+Then test generation:
+
+```text
+Use the my-voice MCP server to generate a short welcome email in the "email-formal" voice profile from this prompt: "Welcome a new donor and thank them for supporting the project."
+```
+
 ## Claude Code setup and test
 
 MVP required: yes
@@ -195,6 +211,12 @@ Inside Claude Code, use:
 
 ```text
 Use the my-voice MCP tools to create a profile from my sample PDF, compare this draft to that profile, and give me a snippet-mode rewrite.
+```
+
+Then test:
+
+```text
+Use the my-voice MCP tools to generate a medium-length introduction in that same voice from this prompt: "Introduce a reflective weekly update about creative work and patience."
 ```
 
 Check `/mcp` if the server does not appear connected.
@@ -239,6 +261,12 @@ Ask the model:
 
 ```text
 Use the my-voice tool to compare this paragraph against the email-formal voice profile and return a rewrite.
+```
+
+Then ask:
+
+```text
+Use the my-voice tool to generate a short announcement in the email-formal voice profile from this prompt: "Announce that the next newsletter will include a behind-the-scenes essay."
 ```
 
 Expected result:
@@ -297,10 +325,13 @@ node dist/index.js http
 
 Create a profile, then run `voice_rewrite_text` in `rewrite` mode.
 
+Also run `voice_generate_text` with a short prompt.
+
 Success criteria:
 
 - `providerUsed` should be `ollama` if the request succeeds.
 - The rewrite should be stronger than the heuristic fallback.
+- The generated content should also report `providerUsed: ollama`.
 
 ## Suggested real-world MVP test sequence
 
@@ -312,7 +343,8 @@ Run this in order:
 4. Start stdio or HTTP server and test in Claude Code
 5. Start HTTP server and test in Open WebUI
 6. Repeat one of the above with Ollama configured as the rewrite backend
-7. Record quirks and update `TESTING.md`
+7. Repeat one of the above with `voice_generate_text`
+8. Record quirks and update `TESTING.md`
 
 If all seven steps work, this is a real testable MVP.
 

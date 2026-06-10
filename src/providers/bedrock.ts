@@ -1,7 +1,13 @@
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 
 import { ProviderConfigurationError } from "../domain/errors.js";
-import type { ProviderConfig, ProviderRewriteRequest, ProviderRewriteResponse } from "../domain/types.js";
+import type {
+  ProviderConfig,
+  ProviderGenerateRequest,
+  ProviderGenerateResponse,
+  ProviderRewriteRequest,
+  ProviderRewriteResponse
+} from "../domain/types.js";
 import type { ModelProvider } from "./types.js";
 
 export class BedrockProvider implements ModelProvider {
@@ -56,6 +62,45 @@ export class BedrockProvider implements ModelProvider {
     return {
       outputText: outputText.trim(),
       notes: [`Rewritten using Bedrock model ${this.config.model}.`]
+    };
+  }
+
+  async generate(request: ProviderGenerateRequest): Promise<ProviderGenerateResponse> {
+    const prompt = [
+      request.profile.compactPromptPack.systemSummary,
+      `Generate ${request.length} original prose in the target voice from this brief:`,
+      request.prompt
+    ].join("\n");
+
+    const body = JSON.stringify({
+      inputText: prompt,
+      textGenerationConfig: {
+        maxTokenCount: request.length === "long" ? 1400 : request.length === "medium" ? 900 : 500,
+        temperature: Math.max(0, Math.min(1, request.strictness))
+      }
+    });
+
+    const response = await this.client.send(
+      new InvokeModelCommand({
+        modelId: this.config.model,
+        contentType: "application/json",
+        accept: "application/json",
+        body
+      })
+    );
+
+    const payload = JSON.parse(new TextDecoder().decode(response.body)) as {
+      results?: Array<{ outputText?: string }>;
+      outputText?: string;
+      generation?: string;
+    };
+
+    const outputText =
+      payload.results?.[0]?.outputText ?? payload.outputText ?? payload.generation ?? request.prompt;
+
+    return {
+      outputText: outputText.trim(),
+      notes: [`Generated using Bedrock model ${this.config.model}.`]
     };
   }
 }

@@ -8,6 +8,7 @@
 - Extracts a compact `guide.json` plus a human-readable `guide.md`.
 - Scores incoming text against the saved voice profile.
 - Rewrites text in three modes: `rewrite`, `hint`, and `snippet`.
+- Generates brand-new content from a prompt in a selected voice profile.
 - Supports `stdio` for local MCP clients and Streamable HTTP for Open WebUI or containerized use.
 - Uses a provider adapter layer for Ollama, OpenAI-compatible APIs, and AWS Bedrock, with a heuristic fallback when no remote model is configured.
 
@@ -64,6 +65,7 @@ The HTTP server exposes:
 - `voice_get_profile`
 - `voice_compare_text`
 - `voice_rewrite_text`
+- `voice_generate_text`
 - `voice_delete_profile`
 - `voice_validate_source`
 
