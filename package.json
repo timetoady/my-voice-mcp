@@ -12,6 +12,7 @@
     "dev:http": "tsx src/index.ts http",
     "dev:stdio": "tsx src/index.ts stdio",
     "eval:email-formal": "tsx src/evals/runEmailFormalEval.ts",
+    "eval:fiction-prose": "tsx src/evals/runFictionProseEval.ts",
     "start:http": "node dist/index.js http",
     "start:stdio": "node dist/index.js stdio",
     "test": "node --import tsx --test --test-concurrency=1 tests/**/*.test.ts"

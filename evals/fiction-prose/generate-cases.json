@@ -1,0 +1,20 @@
+[
+  {
+    "id": "generate-1",
+    "label": "a return home",
+    "prompt": "Write a scene in which a woman returns to the small coastal town she grew up in after many years away, and walks down to the harbor at dusk. Keep the focus on what she notices and on what she does not say.",
+    "length": "medium"
+  },
+  {
+    "id": "generate-2",
+    "label": "a quiet refusal",
+    "prompt": "Write a scene in which an old craftsman is offered a large sum of money for his workshop and declines, without ever fully explaining his reasons.",
+    "length": "short"
+  },
+  {
+    "id": "generate-3",
+    "label": "the last day of term",
+    "prompt": "Write a scene from the point of view of a teacher on the last day of the school year, alone in the empty classroom after the students have gone.",
+    "length": "medium"
+  }
+]

@@ -8,10 +8,10 @@ import { analyzeEmailBundle, normalizeEmailSample } from "../src/analysis/email.
 import { loadConfig } from "../src/config.js";
 import { runEmailFormalEvaluation } from "../src/evals/emailFormal.js";
 import type {
+  ProviderBundleDistillationRequest,
+  ProviderBundleDistillationResponse,
   ProviderCritiqueRequest,
   ProviderCritiqueResponse,
-  ProviderEmailBundleDistillationRequest,
-  ProviderEmailBundleDistillationResponse,
   ProviderGenerateRequest,
   ProviderGenerateResponse,
   ProviderRevisionRequest,
@@ -32,9 +32,9 @@ const silentLogger = {
 class MockReviewedProvider implements ModelProvider {
   readonly kind = "openai-compatible";
 
-  async distillEmailBundle(
-    request: ProviderEmailBundleDistillationRequest
-  ): Promise<ProviderEmailBundleDistillationResponse> {
+  async distillBundle(
+    request: ProviderBundleDistillationRequest
+  ): Promise<ProviderBundleDistillationResponse> {
     return {
       summary: "formal, steady, collaborative email prose that leads with the practical point and then supplies context with restraint",
       voiceRules: [
@@ -232,6 +232,26 @@ test("bundle profile creation stores provenance and avoids obvious topic overfit
   assert.ok(result.profile.stableLexicalMarkers?.includes("wanted"));
   assert.ok(result.profile.topicSpecificLexicalMarkers?.includes("brightspot"));
   assert.equal(result.profile.compactPromptPack.lexicalMarkers.includes("brightspot"), false);
+});
+
+test("email profiles carry no narrative metrics and email scoring has no narrative dimension", async () => {
+  const provider = new MockReviewedProvider();
+  const { service } = await buildService(() => provider);
+  const result = await service.createProfileBundle({
+    voiceName: "Formal Email",
+    profileType: "email-formal",
+    samples: sampleBundleTexts()
+  });
+
+  // The fiction milestone must not change email scoring: email profiles never carry
+  // narrativeMetrics, so compareSnapshot must not add a "narrative" dimension for them.
+  assert.equal(result.profile.narrativeMetrics, undefined);
+
+  const comparison = await service.compareText({
+    voiceId: result.profile.voiceId,
+    text: "I wanted to follow up on the schedule and confirm that we are still aligned on ownership."
+  });
+  assert.equal("narrative" in comparison.similarity.perDimensionScores, false);
 });
 
 test("reviewed rewrite uses critique and revision on bundled email profile", async () => {

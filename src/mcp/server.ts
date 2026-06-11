@@ -67,10 +67,10 @@ export function buildMcpServer(service: VoiceService): McpServer {
     "voice_create_profile_bundle",
     {
       title: "Create Bundled Voice Profile",
-      description: "Create a formal email voice profile from multiple curated samples.",
+      description: "Create a bundled voice profile (email-formal or fiction-prose) from multiple curated samples.",
       inputSchema: z.object({
         voiceName: z.string().min(1),
-        profileType: z.literal("email-formal"),
+        profileType: z.enum(["email-formal", "fiction-prose"]),
         description: z.string().optional(),
         samples: z.array(z.object({
           label: z.string().min(1),
@@ -96,6 +96,7 @@ export function buildMcpServer(service: VoiceService): McpServer {
           summary: result.profile.summary,
           warnings: result.profile.warnings,
           confidenceNotes: result.profile.confidenceNotes,
+          narrativeMetrics: result.profile.narrativeMetrics,
           sourceStats: result.profile.sourceStats,
           provenance: result.provenance
         })
@@ -346,6 +347,7 @@ export function buildMcpServer(service: VoiceService): McpServer {
               sourceStats: profile.sourceStats,
               styleDimensions: profile.styleDimensions,
               structurePatterns: profile.structurePatterns,
+              narrativeMetrics: profile.narrativeMetrics,
               lexicalMarkers: profile.lexicalMarkers,
               rhetoricalDevices: profile.rhetoricalDevices
             })

@@ -2,11 +2,11 @@ import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedroc
 
 import { ProviderConfigurationError } from "../domain/errors.js";
 import type {
+  ProviderBundleDistillationRequest,
+  ProviderBundleDistillationResponse,
   ProviderConfig,
   ProviderCritiqueRequest,
   ProviderCritiqueResponse,
-  ProviderEmailBundleDistillationRequest,
-  ProviderEmailBundleDistillationResponse,
   ProviderGenerateRequest,
   ProviderGenerateResponse,
   ProviderRevisionRequest,
@@ -15,6 +15,7 @@ import type {
   ProviderRewriteResponse,
   VoiceProfile
 } from "../domain/types.js";
+import { contentKindFor } from "../analysis/contentKind.js";
 import type { ModelProvider } from "./types.js";
 
 export class BedrockProvider implements ModelProvider {
@@ -29,18 +30,18 @@ export class BedrockProvider implements ModelProvider {
     this.client = new BedrockRuntimeClient({ region: config.region });
   }
 
-  async distillEmailBundle(
-    request: ProviderEmailBundleDistillationRequest
-  ): Promise<ProviderEmailBundleDistillationResponse> {
+  async distillBundle(
+    request: ProviderBundleDistillationRequest
+  ): Promise<ProviderBundleDistillationResponse> {
+    const kind = contentKindFor(request.profileType);
     const response = await this.invoke([
-      "You distill a formal email voice profile from multiple normalized samples.",
+      ...kind.distillFocus,
       "Return JSON only with fields: summary, voiceRules, stableLexicalMarkers, topicSpecificLexicalMarkers, rhetoricalDevices, antiPatterns, preferredOpenings, preferredClosings, confidenceNotes.",
-      "Find cross-sample commonalities and avoid topic overfitting.",
       "",
       JSON.stringify(request, null, 2)
     ].join("\n"), 1200, 0.2);
 
-    return parseJson<ProviderEmailBundleDistillationResponse>(response);
+    return parseJson<ProviderBundleDistillationResponse>(response);
   }
 
   async rewrite(request: ProviderRewriteRequest): Promise<ProviderRewriteResponse> {
@@ -62,11 +63,12 @@ export class BedrockProvider implements ModelProvider {
   }
 
   async generate(request: ProviderGenerateRequest): Promise<ProviderGenerateResponse> {
+    const kind = contentKindFor(request.profile.profileType);
     const maxTokenCount = request.length === "long" ? 1400 : request.length === "medium" ? 900 : 500;
     const response = await this.invoke([
       buildVoicePrompt(request.profile),
-      `Generate a ${request.length} email draft in the target voice from this brief.`,
-      "Write the final draft itself, not instructions.",
+      kind.generateInstruction.replace("{length}", request.length),
+      `Write the final ${kind.artifactNoun} itself, not instructions.`,
       "",
       request.prompt
     ].join("\n"), maxTokenCount, request.strictness);
@@ -78,9 +80,11 @@ export class BedrockProvider implements ModelProvider {
   }
 
   async critique(request: ProviderCritiqueRequest): Promise<ProviderCritiqueResponse> {
+    const kind = contentKindFor(request.profile.profileType);
     const response = await this.invoke([
       buildVoicePrompt(request.profile),
-      "You are a strict critic of voice fidelity and professional polish.",
+      "You are a strict critic of voice fidelity.",
+      ...kind.critiquePriorities,
       "Return JSON only with fields: voiceStrengths, voiceDrifts, topicLeakage, meaningRisk, mandatoryFixes, optionalImprovements.",
       "",
       JSON.stringify(request, null, 2)

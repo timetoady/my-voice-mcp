@@ -1,4 +1,5 @@
 import type {
+  NarrativeMetrics,
   SimilarityReport,
   StructurePatterns,
   StyleDimensionSet,
@@ -14,6 +15,7 @@ import {
   splitParagraphs,
   splitSentences
 } from "../lib/text.js";
+import { narrativeSnapshot } from "./narrative.js";
 
 function clamp(value: number): number {
   return Math.max(0, Math.min(1, value));
@@ -128,7 +130,8 @@ export function snapshotText(text: string): TextStyleSnapshot {
     structurePatterns,
     lexicalMarkers: extractTopMarkers(normalized, 12),
     rhetoricalDevices: detectRhetoricalDevices(normalized),
-    samplePhrases: sentences.slice(0, 4).map((sentence) => sentence.slice(0, 120))
+    samplePhrases: sentences.slice(0, 4).map((sentence) => sentence.slice(0, 120)),
+    narrativeMetrics: narrativeSnapshot(normalized)
   };
 }
 
@@ -158,6 +161,25 @@ function structureScore(profile: StructurePatterns, snapshot: StructurePatterns)
   return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
 }
 
+function narrativeScore(profile: NarrativeMetrics, snapshot: NarrativeMetrics): number {
+  const values = [
+    differenceScore(profile.narrationDistance, snapshot.narrationDistance),
+    differenceScore(profile.dialogueDensity, snapshot.dialogueDensity),
+    differenceScore(profile.descriptiveDensity, snapshot.descriptiveDensity),
+    differenceScore(profile.interiorityRate, snapshot.interiorityRate),
+    differenceScore(profile.paragraphPacingVariance, snapshot.paragraphPacingVariance),
+    differenceScore(profile.sceneRhythm, snapshot.sceneRhythm),
+    differenceScore(
+      Math.min(1, profile.averageParagraphWords / 80),
+      Math.min(1, snapshot.averageParagraphWords / 80)
+    ),
+    markerOverlapScore(profile.recurringOpeners, snapshot.recurringOpeners),
+    profile.pov === snapshot.pov ? 100 : 50
+  ];
+
+  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
+}
+
 export function compareSnapshot(profile: VoiceProfile, snapshot: TextStyleSnapshot): SimilarityReport {
   const perDimensionScores: Record<string, number> = {};
   for (const [key, value] of Object.entries(profile.styleDimensions)) {
@@ -174,6 +196,12 @@ export function compareSnapshot(profile: VoiceProfile, snapshot: TextStyleSnapsh
       Math.max(1, profile.rhetoricalDevices.length)) *
       100
   );
+
+  // Narrative craft is only scored for profiles that carry it (fiction profiles), so email
+  // and generic profiles keep their existing scoring untouched.
+  if (profile.narrativeMetrics && snapshot.narrativeMetrics) {
+    perDimensionScores.narrative = narrativeScore(profile.narrativeMetrics, snapshot.narrativeMetrics);
+  }
 
   const score = Math.round(
     Object.values(perDimensionScores).reduce((sum, value) => sum + value, 0) /

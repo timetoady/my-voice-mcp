@@ -2,9 +2,14 @@
 
 `my-voice-mcp` is a local-first MCP server that builds compact voice profiles from writing samples, then compares, rewrites, or generates new text in that voice.
 
-The current primary workflow is a process-first formal email flow:
+The current primary workflow is a process-first bundled flow that supports two voice families:
 
-- create a bundled voice profile from multiple curated email samples
+- `email-formal` — formal/work email voice from multiple curated email samples
+- `fiction-prose` — long-form fiction narrative voice from multiple prose excerpts, modeling narration distance, scene rhythm, paragraph pacing, dialogue behavior, descriptive density, and recurring syntactic patterns
+
+For either family you:
+
+- create a bundled voice profile from multiple curated samples
 - rewrite existing text in that voice
 - generate new text in that voice
 - compare `fast` versus `reviewed` quality modes with a fixed human review set
@@ -12,7 +17,7 @@ The current primary workflow is a process-first formal email flow:
 ## Current MVP surface
 
 - `voice_create_profile` for legacy single-PDF profile creation
-- `voice_create_profile_bundle` for preferred multi-sample formal email profile creation
+- `voice_create_profile_bundle` for preferred multi-sample profile creation (`profileType: "email-formal" | "fiction-prose"`)
 - `voice_compare_text`
 - `voice_rewrite_text`
 - `voice_generate_text`
@@ -35,18 +40,19 @@ The current primary workflow is a process-first formal email flow:
 - bearer-token HTTP auth with optional localhost dev bypass
 - local filesystem profile storage
 - single-PDF heuristic profile path
-- bundled `email-formal` profile path with:
+- bundled profile paths (`email-formal`, `fiction-prose`) with:
   - at least 3 samples required
-  - email normalization for greetings, signatures, and reply metadata
+  - content-aware normalization (email: greetings, signatures, reply metadata; fiction: chapter/scene headings, page numbers, boilerplate — paragraph and dialogue structure preserved)
   - provenance capture
-  - stable versus topic-specific marker separation
+  - stable versus topic-specific marker separation (shared across both families)
+  - first-class fiction narrative metrics (narration distance, dialogue/descriptive density, paragraph pacing variance, scene rhythm, interiority, recurring openers) wired into the prompt pack and the similarity score
   - model-backed distillation with heuristic fallback
 - provider adapters for:
   - heuristic
   - OpenAI-compatible HTTP
   - Ollama
   - AWS Bedrock
-- evaluation harness under `evals/email-formal`
+- evaluation harnesses under `evals/email-formal` and `evals/fiction-prose`
 
 ## Quick start
 
@@ -63,13 +69,14 @@ npm run build
 npm test
 ```
 
-3. Run the email-formal evaluation harness
+3. Run an evaluation harness
 
 ```bash
 npm run eval:email-formal
+npm run eval:fiction-prose
 ```
 
-This writes review artifacts to `evals/email-formal/output/`.
+These write review artifacts to `evals/email-formal/output/` and `evals/fiction-prose/output/`. With no model provider configured both `fast` and `reviewed` fall back to the heuristic baseline and read identically; demonstrating the reviewed-vs-fast quality gap requires a configured provider.
 
 4. Start the MCP server
 
@@ -286,23 +293,22 @@ profiles/
       02-<sample>.txt
 ```
 
-## Evaluation set
+## Evaluation sets
 
-The current review harness lives in `evals/email-formal/` and includes:
+Two fixed review harnesses, each with 4 bundled source samples, 3 rewrite cases, 3 prompt-to-draft generation cases, and a content-specific human review rubric:
 
-- 4 bundled source samples
-- 3 rewrite cases
-- 3 prompt-to-draft generation cases
-- a human review rubric
+- `evals/email-formal/` — formal email voice (`npm run eval:email-formal`)
+- `evals/fiction-prose/` — long-form fiction narrative voice (`npm run eval:fiction-prose`); rubric scores voice match, scene-intent & POV preservation, narration-distance & pacing fidelity, prose quality, and meaning/coherence
 
-Use this to compare `fast` and `reviewed` output before claiming process quality.
+Use these to compare `fast` and `reviewed` output before claiming process quality.
 
 ## Setup guides
 
 - Requirements and decision log: [REQUIREMENTS.md](./REQUIREMENTS.md)
 - Active checklist: [TODO.md](./TODO.md)
 - Step-by-step testing and MCP client setup: [TESTING.md](./TESTING.md)
-- Future long-form fiction handoff: [NOVEL_VOICE_BOOTSTRAP.md](./NOVEL_VOICE_BOOTSTRAP.md)
+- Long-form fiction milestone (implemented): [docs/working/fiction-prose-milestone-requirements.md](./docs/working/fiction-prose-milestone-requirements.md)
+- Original fiction design brief: [NOVEL_VOICE_BOOTSTRAP.md](./NOVEL_VOICE_BOOTSTRAP.md)
 
 ## Reference docs
 

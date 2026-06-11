@@ -1,8 +1,8 @@
 import type {
+  ProviderBundleDistillationRequest,
+  ProviderBundleDistillationResponse,
   ProviderCritiqueRequest,
   ProviderCritiqueResponse,
-  ProviderEmailBundleDistillationRequest,
-  ProviderEmailBundleDistillationResponse,
   ProviderGenerateRequest,
   ProviderGenerateResponse,
   ProviderRevisionRequest,
@@ -100,9 +100,18 @@ function buildSnippet(profile: VoiceProfile, request: ProviderRewriteRequest): P
 export class HeuristicProvider implements ModelProvider {
   readonly kind = "heuristic";
 
-  async distillEmailBundle(
-    request: ProviderEmailBundleDistillationRequest
-  ): Promise<ProviderEmailBundleDistillationResponse> {
+  async distillBundle(
+    request: ProviderBundleDistillationRequest
+  ): Promise<ProviderBundleDistillationResponse> {
+    if (request.profileType === "fiction-prose") {
+      return this.distillFictionBundle(request);
+    }
+    return this.distillEmailBundle(request);
+  }
+
+  private async distillEmailBundle(
+    request: ProviderBundleDistillationRequest
+  ): Promise<ProviderBundleDistillationResponse> {
     const confidenceNotes: string[] = [];
     if (request.normalizedSamples.length < 4) {
       confidenceNotes.push("Confidence is moderate because the bundle uses the minimum viable number of email samples.");
@@ -141,6 +150,60 @@ export class HeuristicProvider implements ModelProvider {
     };
   }
 
+  private async distillFictionBundle(
+    request: ProviderBundleDistillationRequest
+  ): Promise<ProviderBundleDistillationResponse> {
+    const metrics = request.narrativeMetrics;
+    const confidenceNotes: string[] = [];
+    if (request.normalizedSamples.length < 4) {
+      confidenceNotes.push("Confidence is moderate because the bundle uses the minimum viable number of fiction excerpts.");
+    }
+    if (metrics && metrics.dialogueDensity < 0.05) {
+      confidenceNotes.push("Dialogue is sparse across samples, so dialogue behavior is weakly modeled.");
+    }
+
+    // Recurring openers are computed from sentence-opener frequency, independent of the
+    // stable/topic marker split, so a scene-specific proper noun can appear among them.
+    // Filter those out before they enter a voice rule that promises not to copy scene nouns.
+    const topicMarkerSet = new Set(request.topicSpecificLexicalMarkers.map((marker) => marker.toLowerCase()));
+    const durableOpeners = (metrics?.recurringOpeners ?? []).filter(
+      (opener) => !topicMarkerSet.has(opener.toLowerCase())
+    );
+
+    const voiceRules = metrics
+      ? [
+          `Hold a ${metrics.pov}-person point of view at ${distanceWord(metrics.narrationDistance)} narration distance.`,
+          `Pace paragraphs ${metrics.paragraphPacingVariance > 0.4 ? "with contrast, alternating longer descriptive passages and shorter beats" : "steadily"}, around ${Math.round(metrics.averageParagraphWords)} words per paragraph.`,
+          `${metrics.dialogueDensity > 0.2 ? "Let dialogue carry real weight" : "Keep dialogue sparse and purposeful"}, matching the source's attribution habits.`,
+          `Keep descriptive density ${metrics.descriptiveDensity > 0.4 ? "specific and sensory" : "restrained and economical"} rather than piling on adjectives.`,
+          `Reuse durable voice habits and recurring openings (${[...request.stableLexicalMarkers.slice(0, 4), ...durableOpeners.slice(0, 3)].join(", ") || "the source's habitual phrasing"}) without copying scene-specific nouns.`
+        ]
+      : [
+          "Hold a consistent point of view and narration distance.",
+          "Vary paragraph pacing between description and shorter beats.",
+          "Keep dialogue purposeful and match the source's attribution habits.",
+          "Match descriptive density without overloading adjectives.",
+          "Favor durable voice traits over scene-specific nouns."
+        ];
+
+    return {
+      summary: `${request.heuristicSummary} in a long-form fiction narrative voice that preserves scene rhythm, narration distance, and pacing over surface ornamentation.`,
+      voiceRules,
+      stableLexicalMarkers: request.stableLexicalMarkers.slice(0, 12),
+      topicSpecificLexicalMarkers: request.topicSpecificLexicalMarkers.slice(0, 12),
+      rhetoricalDevices: request.heuristicRhetoricalDevices,
+      antiPatterns: [
+        ...request.heuristicAntiPatterns,
+        "Do not flatten narration distance or let the point of view drift mid-scene.",
+        "Do not mistake more adjectives for style, or slip into generic literary pastiche.",
+        "Do not sacrifice scene intent or plot facts to chase voice similarity."
+      ],
+      preferredOpenings: durableOpeners.slice(0, 3),
+      preferredClosings: [],
+      confidenceNotes
+    };
+  }
+
   async rewrite(request: ProviderRewriteRequest): Promise<ProviderRewriteResponse> {
     return rewriteWithHeuristics(request);
   }
@@ -159,16 +222,24 @@ export class HeuristicProvider implements ModelProvider {
         ? inferMeaningRisk(request.sourceText, request.candidateText)
         : "Low confidence heuristic estimate. Verify intent and factual accuracy during review.";
 
+    const optionalImprovements =
+      request.profile.profileType === "fiction-prose"
+        ? [
+            "Hold the established narration distance and point of view.",
+            "Vary paragraph pacing instead of flattening every beat, and keep prose lived rather than commentary about style."
+          ]
+        : [
+            "Trim any generic assistant framing that sounds like instructions rather than an email draft.",
+            "Keep the cadence steady and professional instead of over-stylizing."
+          ];
+
     return {
       voiceStrengths: similarity.matchedTraits.slice(0, 4),
       voiceDrifts: similarity.driftTraits.slice(0, 4),
       topicLeakage: leakedMarkers.slice(0, 4),
       meaningRisk,
       mandatoryFixes: similarity.revisionPriorities.slice(0, 3),
-      optionalImprovements: [
-        "Trim any generic assistant framing that sounds like instructions rather than an email draft.",
-        "Keep the cadence steady and professional instead of over-stylizing."
-      ]
+      optionalImprovements
     };
   }
 
@@ -200,11 +271,31 @@ export function rewriteWithHeuristics(request: ProviderRewriteRequest): Provider
     return buildSnippet(profile, request);
   }
 
+  // Heuristics cannot meaningfully restyle prose without damaging it; the fiction fast
+  // baseline returns the source largely intact. Real voice transfer happens in reviewed
+  // mode with a configured model provider.
+  if (profile.profileType === "fiction-prose") {
+    return {
+      outputText: inputText.trim(),
+      notes: ["Heuristic fiction baseline returned the source largely intact because no remote model provider was configured."]
+    };
+  }
+
   const rewritten = rewriteSentences(applyLexicalMarkers(inputText, profile), profile);
   return {
     outputText: rewritten,
     notes: ["Heuristic rewrite used because no remote model provider was configured."]
   };
+}
+
+function distanceWord(distance: number): string {
+  if (distance < 0.4) {
+    return "an intimate";
+  }
+  if (distance > 0.6) {
+    return "a distant";
+  }
+  return "a measured";
 }
 
 function targetParagraphs(length: "short" | "medium" | "long"): number {
@@ -272,6 +363,10 @@ function buildLead(intent: ReturnType<typeof inferIntent>, subject: string, prof
 export function generateWithHeuristics(
   request: ProviderGenerateRequest
 ): ProviderGenerateResponse {
+  if (request.profile.profileType === "fiction-prose") {
+    return generateFictionWithHeuristics(request);
+  }
+
   const prompt = normalizePrompt(request.prompt);
   const subject = extractSubject(prompt);
   const intent = inferIntent(prompt);
@@ -305,6 +400,24 @@ export function generateWithHeuristics(
   return {
     outputText: paragraphs.join("\n\n"),
     notes: ["Heuristic generation used because no remote model provider was configured."]
+  };
+}
+
+function generateFictionWithHeuristics(request: ProviderGenerateRequest): ProviderGenerateResponse {
+  const brief = normalizePrompt(request.prompt);
+  const markerLead = request.profile.lexicalMarkers.slice(0, 3).join(", ");
+  const paragraphs = Array.from({ length: targetParagraphs(request.length) }, (_, index) => {
+    if (index === 0) {
+      return brief;
+    }
+    return `The scene continues, holding its established narration distance and pacing${
+      markerLead ? `, with familiar touches like ${markerLead}` : ""
+    }.`;
+  });
+
+  return {
+    outputText: paragraphs.join("\n\n"),
+    notes: ["Heuristic fiction baseline used because no remote model provider was configured."]
   };
 }
 
