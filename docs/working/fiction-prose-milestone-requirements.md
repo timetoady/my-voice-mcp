@@ -12,6 +12,7 @@ Related: design brief in `NOVEL_VOICE_BOOTSTRAP.md`; project-wide tracker in `RE
 - Senior-dev pass: **complete** (risk-hardening + DRY sweep; 22/22 tests pass)
 - Independent critique and persona review: **complete** (fresh reviewer sub-agent; overall ~7.5, below the ≥8 bar — Docs 5 and one voiceRule honesty defect)
 - Quality-gate loop: **complete** (iteration 1 closed all must-fix gaps; independent re-score 8.7, every dimension ≥7 — clears the bar)
+- PR creation: **complete** (PR #1 pushed; commit `27b9ee7`)
 - PR creation: not started
 - Review handling: not started
 - Closeout: not started
@@ -96,17 +97,18 @@ Dimensions scored 1-10. Passing bar: **every dimension ≥ 7 and overall ≥ 8.*
 - [x] Run senior-dev pass (risk-hardening + DRY sweep)
 - [ ] Run independent critique and persona/DX review
 - [x] Clear the quality bar via the quality-gate loop
-- [ ] Create PR
+- [x] Create PR
 - [ ] Handle review comments
 - [ ] Post closeout summary with PR and QA notes
 
 ## PR and Review Tracking
 
-- Repo and branch coverage: TBD (feature branch off `main`)
-- PR links: TBD
-- Reviewer automation status: TBD (check repo Copilot/CodeRabbit config at PR time)
-- Review status: not started
-- Closeout status: not started
+- Repo and branch coverage: single repo `my-voice-mcp`, branch `feat/fiction-prose-voice-milestone` → `main`.
+- PR links: https://github.com/timetoady/my-voice-mcp/pull/1
+- Commit: `27b9ee7` — 34 files changed (+1796 / -483).
+- Reviewer automation status: none added automatically; depends on the repo's GitHub settings (no Copilot/CodeRabbit reviewer was requested via CLI). Add reviewers in the GitHub UI if desired.
+- Review status: awaiting reviewer comments (developer to confirm when populated).
+- Closeout status: not started.
 
 ## Test and QA
 
