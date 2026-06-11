@@ -182,14 +182,15 @@ Run these commands from the repo root:
 npm.cmd run build
 npm.cmd test
 npm.cmd run eval:email-formal
+npm.cmd run eval:fiction-prose
 ```
 
 Expected result:
 
 - build succeeds
 - tests pass
-- `evals/email-formal/output/latest-report.md`
-- `evals/email-formal/output/latest-report.json`
+- `evals/email-formal/output/latest-report.md` and `.json`
+- `evals/fiction-prose/output/latest-report.md` and `.json`
 
 ## Formal-email evaluation harness
 
@@ -223,6 +224,18 @@ npm.cmd run eval:email-formal
 - average at least 4/5 for usefulness with fewer manual edits
 - no case below 3/5 on correctness
 - reviewed mode should outperform fast mode in at least 4 of 6 total tasks
+
+## Fiction-prose evaluation harness
+
+The fixed review set lives in `evals/fiction-prose/` (4 bundled prose excerpts in one consistent narrative voice, 3 rewrite cases, 3 scene-continuation cases, and a fiction rubric).
+
+```powershell
+npm.cmd run eval:fiction-prose
+```
+
+It runs the same fast-vs-reviewed flow as the email harness, but the profile is built with `profileType: "fiction-prose"`, so it also computes narrative metrics (narration distance, pacing, dialogue behavior, etc.) and scores them. Human acceptance target: average ≥4/5 voice match and scene-intent/POV preservation, no case below 3/5 on meaning/coherence, and reviewed beating fast on ≥4/6 tasks.
+
+Note: with no model provider configured, fast and reviewed fall back to the heuristic baseline and read identically; a configured provider is required to exercise the reviewed-vs-fast gap.
 
 ## Start the MCP server
 
@@ -297,6 +310,8 @@ Input shape:
   ]
 }
 ```
+
+For a fiction voice, set `"profileType": "fiction-prose"` and supply 3+ prose excerpts in one consistent narrative voice instead of emails. The response and `voice://profiles/{voiceId}/metrics` resource then include a `narrativeMetrics` block.
 
 Success checks:
 

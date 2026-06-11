@@ -10,6 +10,7 @@ import type {
   CreateProfileResult,
   GenerateResult,
   ProfileType,
+  ProviderBundleDistillationRequest,
   ProviderCritiqueResponse,
   SimilarityReport,
   ProviderConfig,
@@ -19,7 +20,10 @@ import type {
   VoiceProfile,
   ValidationResult
 } from "../domain/types.js";
+import type { BundleAnalysis, NormalizedSample } from "../analysis/bundle.js";
+import { contentKindFor, isBundleProfileType } from "../analysis/contentKind.js";
 import { analyzeEmailBundle, normalizeEmailSample } from "../analysis/email.js";
+import { analyzeFictionBundle, normalizeFictionSample } from "../analysis/fiction.js";
 import { buildBundleProfile, buildProfile } from "../analysis/profile.js";
 import { compareSnapshot, snapshotText, summarizeStyle } from "../analysis/style.js";
 import { logger, type Logger } from "../lib/logger.js";
@@ -97,7 +101,7 @@ export class VoiceService {
   async createProfileBundle(params: {
     voiceName: string;
     description?: string;
-    profileType: "email-formal";
+    profileType: ProfileType;
     samples: BundleSampleInput[];
     providerOverride?: ProviderConfig;
   }): Promise<CreateProfileBundleResult> {
@@ -108,25 +112,29 @@ export class VoiceService {
       sampleCount: params.samples.length
     });
 
-    if (params.profileType !== "email-formal") {
-      throw new AppError("The current MVP bundle flow only supports the 'email-formal' profile type.", "UNSUPPORTED_PROFILE_TYPE", 400);
+    if (!isBundleProfileType(params.profileType)) {
+      throw new AppError(
+        "The bundle flow supports the 'email-formal' and 'fiction-prose' profile types.",
+        "UNSUPPORTED_PROFILE_TYPE",
+        400
+      );
     }
 
     if (params.samples.length < 3) {
       throw new AppError(
-        "Create at least 3 samples for an email-formal bundle so the profile can separate stable voice from topic noise.",
+        "Create at least 3 samples for a bundle so the profile can separate stable voice from topic noise.",
         "INSUFFICIENT_SAMPLES",
         400
       );
     }
 
-    const sampleLimits = this.getBundleSampleLimits();
+    const sampleLimits = this.getBundleSampleLimits(params.profileType);
     const normalizedSamples = [];
     for (const sample of params.samples) {
-      normalizedSamples.push(await this.loadBundleSample(sample, sampleLimits));
+      normalizedSamples.push(await this.loadBundleSample(sample, sampleLimits, params.profileType));
     }
 
-    const bundle = analyzeEmailBundle(normalizedSamples);
+    const bundle = this.analyzeBundle(params.profileType, normalizedSamples);
     if (
       bundle.provenance.combinedCharacters > this.config.sourceLimits.maxChars ||
       bundle.provenance.combinedEstimatedTokens > this.config.sourceLimits.maxTokens
@@ -139,10 +147,11 @@ export class VoiceService {
     }
 
     const heuristicSnapshot = snapshotText(bundle.combinedText);
-    const distillationRequest = {
+    const distillationRequest: ProviderBundleDistillationRequest = {
       voiceName: params.voiceName,
       description: params.description,
       profileType: params.profileType,
+      voiceFocus: contentKindFor(params.profileType).artifactNoun,
       normalizedSamples: bundle.normalizedSamples.map((sample) => ({
         label: sample.label,
         normalizedText: sample.normalizedText,
@@ -155,17 +164,18 @@ export class VoiceService {
       repeatedPhrases: bundle.repeatedPhrases,
       heuristicSummary: summarizeStyle(heuristicSnapshot),
       heuristicRhetoricalDevices: heuristicSnapshot.rhetoricalDevices.slice(0, 6),
-      heuristicAntiPatterns: buildHeuristicAntiPatterns(bundle.stableLexicalMarkers, bundle.topicSpecificLexicalMarkers)
-    } as const;
+      heuristicAntiPatterns: buildHeuristicAntiPatterns(bundle.stableLexicalMarkers, bundle.topicSpecificLexicalMarkers),
+      narrativeMetrics: bundle.narrativeMetrics
+    };
 
     const provider = this.resolveProvider(params.providerOverride);
     const heuristic = new HeuristicProvider();
     const warnings = [...bundle.warnings];
-    let distillation = await heuristic.distillEmailBundle(distillationRequest);
+    let distillation = await heuristic.distillBundle(distillationRequest);
 
     if (this.isModelBackedProvider(provider)) {
       try {
-        distillation = await provider.distillEmailBundle(distillationRequest);
+        distillation = await provider.distillBundle(distillationRequest);
       } catch (error) {
         warnings.push(`Model distillation fell back to heuristics after ${provider.kind} failed.`);
         this.appLogger.warn("profile.bundle_create.provider_failed", {
@@ -205,7 +215,8 @@ export class VoiceService {
       antiPatterns: distillation.antiPatterns,
       preferredOpenings: distillation.preferredOpenings,
       preferredClosings: distillation.preferredClosings,
-      voiceRules: distillation.voiceRules
+      voiceRules: distillation.voiceRules,
+      narrativeMetrics: bundle.narrativeMetrics
     });
 
     await this.store.saveProfile({
@@ -543,7 +554,19 @@ export class VoiceService {
     return this.isModelBackedProvider(provider) ? "reviewed" : "fast";
   }
 
-  private getBundleSampleLimits() {
+  private analyzeBundle(profileType: ProfileType, samples: NormalizedSample[]): BundleAnalysis {
+    return profileType === "fiction-prose" ? analyzeFictionBundle(samples) : analyzeEmailBundle(samples);
+  }
+
+  private getBundleSampleLimits(profileType: ProfileType) {
+    // Fiction excerpts are far longer than email bodies, so they get a roomier per-sample ceiling.
+    if (profileType === "fiction-prose") {
+      return {
+        maxChars: Math.min(this.config.sourceLimits.maxChars, 60000),
+        maxTokens: Math.min(this.config.sourceLimits.maxTokens, 15000)
+      };
+    }
+
     return {
       maxChars: Math.min(this.config.sourceLimits.maxChars, 24000),
       maxTokens: Math.min(this.config.sourceLimits.maxTokens, 6000)
@@ -552,7 +575,8 @@ export class VoiceService {
 
   private async loadBundleSample(
     sample: BundleSampleInput,
-    sampleLimits: { maxChars: number; maxTokens: number }
+    sampleLimits: { maxChars: number; maxTokens: number },
+    profileType: ProfileType
   ) {
     const label = sample.label.trim();
     if (!label) {
@@ -589,7 +613,8 @@ export class VoiceService {
       throw new AppError(`Sample '${label}' is empty after loading.`, "INVALID_SAMPLE", 400);
     }
 
-    const normalized = normalizeEmailSample({
+    const normalizeSample = profileType === "fiction-prose" ? normalizeFictionSample : normalizeEmailSample;
+    const normalized = normalizeSample({
       label,
       sourceKind,
       sourceType,
@@ -599,7 +624,7 @@ export class VoiceService {
 
     if (!normalized.normalizedText.trim()) {
       throw new AppError(
-        `Sample '${label}' does not leave enough body text after email normalization. Add a fuller sample without relying on greetings or signature blocks.`,
+        `Sample '${label}' does not leave enough body text after normalization. Add a fuller sample without relying on structural scaffolding such as headings, greetings, or signature blocks.`,
         "INVALID_SAMPLE",
         400
       );
@@ -609,16 +634,18 @@ export class VoiceService {
       normalized.provenance.normalizedCharacters > sampleLimits.maxChars ||
       normalized.provenance.estimatedTokens > sampleLimits.maxTokens
     ) {
+      const excerptNoun = profileType === "fiction-prose" ? "prose excerpt" : "email excerpt";
       throw new AppError(
-        `Sample '${label}' is too large for one bundle item (${normalized.provenance.normalizedCharacters} chars, ${normalized.provenance.estimatedTokens} estimated tokens). Split it into a shorter email excerpt.`,
+        `Sample '${label}' is too large for one bundle item (${normalized.provenance.normalizedCharacters} chars, ${normalized.provenance.estimatedTokens} estimated tokens). Split it into a shorter ${excerptNoun}.`,
         "SOURCE_TOO_LARGE",
         400
       );
     }
 
     if (estimateTokens(normalized.normalizedText) < 30) {
+      const bodyNoun = profileType === "fiction-prose" ? "prose passage" : "email body";
       throw new AppError(
-        `Sample '${label}' is too small after normalization to contribute a reliable voice signal. Provide a fuller email body.`,
+        `Sample '${label}' is too small after normalization to contribute a reliable voice signal. Provide a fuller ${bodyNoun}.`,
         "INVALID_SAMPLE",
         400
       );

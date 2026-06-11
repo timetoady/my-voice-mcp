@@ -20,9 +20,9 @@ The current milestone is intentionally process-first for formal/work email. The 
 - Bearer-token HTTP auth with optional localhost bypass
 - Provider adapters for heuristic, OpenAI-compatible, Ollama, and Bedrock backends
 - Legacy single-PDF profile creation
-- Preferred bundled `email-formal` profile creation from 3+ samples
+- Preferred bundled profile creation from 3+ samples (`email-formal` and `fiction-prose`)
 - Rewrite and generation with `qualityMode: "fast" | "reviewed"`
-- Evaluation harness under `evals/email-formal`
+- Evaluation harnesses under `evals/email-formal` and `evals/fiction-prose`
 
 ## Explicitly deferred
 
@@ -32,8 +32,9 @@ The current milestone is intentionally process-first for formal/work email. The 
 - Multi-tenant isolation
 - OAuth
 - Team sharing
-- Long-form fiction tuning as a primary milestone
 - Multi-agent debate beyond one critic-and-revise pass
+
+(Long-form fiction voice was previously deferred and is now implemented as the `fiction-prose` bundle family — see below and `docs/working/fiction-prose-milestone-requirements.md`.)
 
 ## Key decisions
 
@@ -116,21 +117,20 @@ Notes:
 - Heuristic profile creation from one source PDF
 - Stored `guide.json`, `guide.md`, and `extracted.txt`
 
-### Bundled email-formal profile path
+### Bundled profile paths (`email-formal`, `fiction-prose`)
 
-- `voice_create_profile_bundle`
+- `voice_create_profile_bundle` with `profileType: "email-formal" | "fiction-prose"`
 - Validation requiring at least 3 samples
-- Per-sample and combined size limits
+- Per-sample and combined size limits (fiction gets a roomier per-sample ceiling)
 - Support for sample `text` or local `path`
-- Email normalization that strips or downweights:
-  - greetings
-  - signatures
-  - reply headers
-  - one-off routing metadata
-- Cross-sample analysis that separates:
+- Content-aware normalization:
+  - email: strips/downweights greetings, signatures, reply headers, one-off routing metadata
+  - fiction: strips chapter/section headings, scene-break glyphs, page numbers, and source boilerplate while preserving paragraph and dialogue structure
+- Cross-sample analysis (shared across both families) that separates:
   - stable lexical markers
   - topic-specific lexical markers
   - repeated phrases
+- Fiction profiles additionally compute first-class narrative metrics (point of view, narration distance, dialogue density, descriptive density, paragraph pacing variance, scene rhythm, interiority, recurring openers), wired into both the prompt pack and the similarity score
 - Model-backed bundle distillation with heuristic fallback
 - Provenance capture and persistence
 - Confidence notes persisted in the profile
@@ -145,34 +145,32 @@ Notes:
   - one revision pass
 - Heuristic fallback when no model-backed provider is configured or when the provider fails
 
-### Evaluation harness
+### Evaluation harnesses
 
-- Dedicated review area under `evals/email-formal`
-- 4 curated source email samples
-- 3 rewrite cases
-- 3 generation cases
-- Human review rubric
-- `npm run eval:email-formal`
+- Dedicated review areas under `evals/email-formal` and `evals/fiction-prose`
+- Each: 4 curated source samples, 3 rewrite cases, 3 generation cases, a content-specific human review rubric
+- `npm run eval:email-formal` and `npm run eval:fiction-prose`
 - Markdown and JSON report output
+- Shared runner (`src/evals/bundleEval.ts`) drives both families
 
 ### Verification status
 
 - `npm.cmd run build` passes
-- `npm.cmd test` passes
-- `npm.cmd run eval:email-formal` runs locally and produces artifacts
+- `npm.cmd test` passes (email + fiction workflow tests)
+- `npm.cmd run eval:email-formal` and `npm.cmd run eval:fiction-prose` run locally and produce artifacts
 
 ## Known limitations
 
-- The bundled profile path currently supports only `profileType: "email-formal"`.
-- The evaluation harness can run in heuristic mode, but real reviewed-mode quality still depends on a configured model-backed provider.
+- The bundled profile path supports `profileType: "email-formal"` and `"fiction-prose"`.
+- The evaluation harnesses can run in heuristic mode, but real reviewed-mode quality still depends on a configured model-backed provider.
 - Human scoring thresholds are defined, but a real human acceptance run is still outstanding.
 - Open WebUI, Claude Code, and Codex live smoke tests need to be re-run against this new bundled-profile workflow.
 - The current machine still is not set up for live Ollama-backed validation.
 
 ## Next recommended work
 
-1. Run the formal email evaluation harness with an actual OpenAI-compatible endpoint and capture a human-scored report.
-2. Perform live bundled-profile smoke tests in Codex, Claude Code, and Open WebUI.
-3. Add a small set of real-world failure fixtures for overfit, meaning drift, and generic assistant phrasing.
-4. Consider whether the next voice family should be another constrained domain such as executive email or newsletter intro, rather than jumping immediately to long-form fiction.
+1. Run both evaluation harnesses with an actual model-backed provider and capture human-scored reports (confirm reviewed beats fast on ≥4/6 tasks per family).
+2. Perform live bundled-profile smoke tests in Codex, Claude Code, and Open WebUI for both `email-formal` and `fiction-prose`.
+3. Add a small set of real-world failure fixtures for overfit, meaning/POV drift, and style-commentary-instead-of-prose.
+4. Consider the next constrained voice family (e.g. executive email, newsletter intro, or a second fiction narrator style).
 5. After process quality is stable, add Google Drive ingestion as a source convenience feature.

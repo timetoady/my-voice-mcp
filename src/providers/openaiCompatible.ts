@@ -1,10 +1,10 @@
 import { ProviderConfigurationError } from "../domain/errors.js";
 import type {
+  ProviderBundleDistillationRequest,
+  ProviderBundleDistillationResponse,
   ProviderConfig,
   ProviderCritiqueRequest,
   ProviderCritiqueResponse,
-  ProviderEmailBundleDistillationRequest,
-  ProviderEmailBundleDistillationResponse,
   ProviderGenerateRequest,
   ProviderGenerateResponse,
   ProviderRevisionRequest,
@@ -12,6 +12,7 @@ import type {
   ProviderRewriteRequest,
   ProviderRewriteResponse
 } from "../domain/types.js";
+import { contentKindFor } from "../analysis/contentKind.js";
 import type { ModelProvider } from "./types.js";
 
 interface ChatMessage {
@@ -24,31 +25,28 @@ export class OpenAICompatibleProvider implements ModelProvider {
 
   constructor(private readonly config: ProviderConfig) {}
 
-  async distillEmailBundle(
-    request: ProviderEmailBundleDistillationRequest
-  ): Promise<ProviderEmailBundleDistillationResponse> {
+  async distillBundle(
+    request: ProviderBundleDistillationRequest
+  ): Promise<ProviderBundleDistillationResponse> {
+    const kind = contentKindFor(request.profileType);
     const content = await this.completeJson([
       {
         role: "system",
-        content: [
-          "You distill a formal email voice profile from multiple normalized samples.",
-          "Find cross-sample commonalities and avoid overfitting to project-specific nouns.",
-          "Return JSON only."
-        ].join("\n")
+        content: [...kind.distillFocus, "Return JSON only."].join("\n")
       },
       {
         role: "user",
         content: [
-          "Create a compact voice profile for profileType=email-formal.",
+          `Create a compact voice profile for profileType=${request.profileType}.`,
           "Required JSON fields: summary, voiceRules, stableLexicalMarkers, topicSpecificLexicalMarkers, rhetoricalDevices, antiPatterns, preferredOpenings, preferredClosings, confidenceNotes.",
-          "Keep arrays short and specific. Voice rules should be durable across unrelated work emails.",
+          "Keep arrays short and specific. Voice rules should be durable across new work in this voice.",
           "",
           JSON.stringify(request, null, 2)
         ].join("\n")
       }
     ], 0.2);
 
-    return parseJson<ProviderEmailBundleDistillationResponse>(content);
+    return parseJson<ProviderBundleDistillationResponse>(content);
   }
 
   async rewrite(request: ProviderRewriteRequest): Promise<ProviderRewriteResponse> {
@@ -81,6 +79,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
   }
 
   async generate(request: ProviderGenerateRequest): Promise<ProviderGenerateResponse> {
+    const kind = contentKindFor(request.profile.profileType);
     const content = await this.completeText([
       {
         role: "system",
@@ -89,9 +88,9 @@ export class OpenAICompatibleProvider implements ModelProvider {
       {
         role: "user",
         content: [
-          `Generate a ${request.length} email draft in the target voice.`,
-          "Write the final draft itself, not instructions about how to write it.",
-          "Keep the result polished and coherent.",
+          kind.generateInstruction.replace("{length}", request.length),
+          `Write the final ${kind.artifactNoun} itself, not instructions about how to write it.`,
+          "Keep the result coherent and self-consistent.",
           "",
           request.prompt
         ].join("\n")
@@ -105,14 +104,14 @@ export class OpenAICompatibleProvider implements ModelProvider {
   }
 
   async critique(request: ProviderCritiqueRequest): Promise<ProviderCritiqueResponse> {
+    const kind = contentKindFor(request.profile.profileType);
     const content = await this.completeJson([
       {
         role: "system",
         content: [
           "You are a strict writing critic evaluating voice fidelity.",
           "Return JSON only.",
-          "For rewrites prioritize meaning preservation, tone fidelity, and reduction of generic assistant phrasing.",
-          "For generation prioritize voice fidelity, coherence, and whether the result sounds like an actual email draft."
+          ...kind.critiquePriorities
         ].join("\n")
       },
       {

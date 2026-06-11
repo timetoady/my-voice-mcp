@@ -2,11 +2,13 @@ import type {
   BundleProvenance,
   CreateProfileBundleResult,
   CreateProfileResult,
+  NarrativeMetrics,
   ProfileType,
   TextStyleSnapshot,
   VoiceProfile
 } from "../domain/types.js";
 import { AppError } from "../domain/errors.js";
+import { contentKindFor } from "./contentKind.js";
 import { sha256 } from "../lib/hash.js";
 import {
   estimateTokens,
@@ -64,7 +66,7 @@ function buildPromptPack(profile: Omit<VoiceProfile, "compactPromptPack">, custo
       "Preserve the original meaning and factual claims.",
       "Prefer the source voice's cadence over generic assistant phrasing.",
       "Only intensify style when the source sample clearly supports it.",
-      "Keep the output readable and professionally polished."
+      contentKindFor(profile.profileType).revisionClosing
     ]
   };
 }
@@ -120,6 +122,7 @@ function buildComposedProfile(params: {
   preferredOpenings?: string[];
   preferredClosings?: string[];
   voiceRules?: string[];
+  narrativeMetrics?: NarrativeMetrics;
 }): { profile: VoiceProfile; guideMarkdown: string; extractedText: string } {
   const normalized = normalizeWhitespace(params.normalizedText);
   if (!normalized) {
@@ -177,7 +180,10 @@ function buildComposedProfile(params: {
     rhetoricalDevices: params.rhetoricalDevices?.length ? params.rhetoricalDevices : rhetoricalDevices(snapshot),
     antiPatterns: params.antiPatterns?.length ? params.antiPatterns : antiPatterns(snapshot),
     preferredOpenings: params.preferredOpenings?.length ? params.preferredOpenings : topSentenceOpeners(normalized),
-    preferredClosings: params.preferredClosings?.length ? params.preferredClosings : topSentenceClosings(normalized)
+    preferredClosings: params.preferredClosings?.length ? params.preferredClosings : topSentenceClosings(normalized),
+    // Only carried for fiction profiles (callers pass it explicitly). Email/legacy profiles
+    // leave this undefined so their similarity scoring is unchanged.
+    narrativeMetrics: params.narrativeMetrics
   };
 
   const profile: VoiceProfile = {
@@ -227,7 +233,7 @@ export function buildBundleProfile(params: {
   voiceId: string;
   voiceName: string;
   description?: string;
-  profileType: "email-formal";
+  profileType: ProfileType;
   combinedText: string;
   sourceFileName: string;
   sampleCount: number;
@@ -245,6 +251,7 @@ export function buildBundleProfile(params: {
   preferredOpenings: string[];
   preferredClosings: string[];
   voiceRules: string[];
+  narrativeMetrics?: NarrativeMetrics;
 }): CreateProfileBundleResult {
   const result = buildComposedProfile({
     voiceId: params.voiceId,
@@ -267,7 +274,8 @@ export function buildBundleProfile(params: {
     antiPatterns: params.antiPatterns,
     preferredOpenings: params.preferredOpenings,
     preferredClosings: params.preferredClosings,
-    voiceRules: params.voiceRules
+    voiceRules: params.voiceRules,
+    narrativeMetrics: params.narrativeMetrics
   });
 
   return {

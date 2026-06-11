@@ -1,7 +1,7 @@
 import type { VoiceService } from "../services/voiceService.js";
 import { runBundleEvaluation } from "./bundleEval.js";
 
-export async function runEmailFormalEvaluation(params: {
+export async function runFictionProseEvaluation(params: {
   service: VoiceService;
   fixtureDir: string;
   outputDir?: string;
@@ -9,11 +9,11 @@ export async function runEmailFormalEvaluation(params: {
 }) {
   return runBundleEvaluation({
     service: params.service,
-    profileType: "email-formal",
+    profileType: "fiction-prose",
     fixtureDir: params.fixtureDir,
     outputDir: params.outputDir,
-    voiceName: params.voiceName ?? "email-formal-eval",
-    title: "Email Formal Evaluation Report",
-    description: "Evaluation bundle for formal email voice review."
+    voiceName: params.voiceName ?? "fiction-prose-eval",
+    title: "Fiction Prose Evaluation Report",
+    description: "Evaluation bundle for long-form fiction narrative voice review."
   });
 }

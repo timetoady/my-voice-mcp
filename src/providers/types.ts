@@ -1,8 +1,8 @@
 import type {
+  ProviderBundleDistillationRequest,
+  ProviderBundleDistillationResponse,
   ProviderCritiqueRequest,
   ProviderCritiqueResponse,
-  ProviderEmailBundleDistillationRequest,
-  ProviderEmailBundleDistillationResponse,
   ProviderGenerateRequest,
   ProviderGenerateResponse,
   ProviderRevisionRequest,
@@ -13,9 +13,9 @@ import type {
 
 export interface ModelProvider {
   readonly kind: string;
-  distillEmailBundle(
-    request: ProviderEmailBundleDistillationRequest
-  ): Promise<ProviderEmailBundleDistillationResponse>;
+  distillBundle(
+    request: ProviderBundleDistillationRequest
+  ): Promise<ProviderBundleDistillationResponse>;
   rewrite(request: ProviderRewriteRequest): Promise<ProviderRewriteResponse>;
   generate(request: ProviderGenerateRequest): Promise<ProviderGenerateResponse>;
   critique(request: ProviderCritiqueRequest): Promise<ProviderCritiqueResponse>;

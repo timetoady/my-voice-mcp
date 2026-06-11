@@ -2,7 +2,7 @@ export type ProviderKind = "none" | "ollama" | "openai-compatible" | "bedrock";
 
 export type RewriteMode = "rewrite" | "hint" | "snippet";
 export type QualityMode = "fast" | "reviewed";
-export type ProfileType = "generic" | "email-formal";
+export type ProfileType = "generic" | "email-formal" | "fiction-prose";
 
 export interface BundleSampleInput {
   label: string;
@@ -23,7 +23,7 @@ export interface SourceProvenance {
 }
 
 export interface BundleProvenance {
-  normalization: "email-formal-v1";
+  normalization: "email-formal-v1" | "fiction-prose-v1";
   totalSamples: number;
   combinedCharacters: number;
   combinedEstimatedTokens: number;
@@ -71,6 +71,28 @@ export interface CompactPromptPack {
   revisionChecklist: string[];
 }
 
+/**
+ * Fiction-specific narrative craft signals. Computed for every snapshot but only
+ * folded into similarity scoring when the profile itself carries them (fiction profiles).
+ */
+export interface NarrativeMetrics {
+  pov: "first" | "third" | "mixed";
+  /** 0 = intimate/deep narration, 1 = distant/objective narration. */
+  narrationDistance: number;
+  /** Share of words that fall inside dialogue (0-1). */
+  dialogueDensity: number;
+  /** Concentration of adjectives, adverbs, and sensory words (0-1). */
+  descriptiveDensity: number;
+  /** Rate of interiority/perception verbs (0-1). */
+  interiorityRate: number;
+  averageParagraphWords: number;
+  /** Coefficient of variation of paragraph length (0-1); higher = more pacing contrast. */
+  paragraphPacingVariance: number;
+  /** Share of short "beat" paragraphs among all paragraphs (0-1). */
+  sceneRhythm: number;
+  recurringOpeners: string[];
+}
+
 export interface VoiceProfile {
   voiceId: string;
   voiceName: string;
@@ -91,6 +113,7 @@ export interface VoiceProfile {
   antiPatterns: string[];
   preferredOpenings: string[];
   preferredClosings: string[];
+  narrativeMetrics?: NarrativeMetrics;
   compactPromptPack: CompactPromptPack;
 }
 
@@ -102,6 +125,7 @@ export interface TextStyleSnapshot {
   lexicalMarkers: string[];
   rhetoricalDevices: string[];
   samplePhrases: string[];
+  narrativeMetrics: NarrativeMetrics;
 }
 
 export interface SimilarityReport {
@@ -151,10 +175,12 @@ export interface ProviderGenerateRequest {
   length: "short" | "medium" | "long";
 }
 
-export interface ProviderEmailBundleDistillationRequest {
+export interface ProviderBundleDistillationRequest {
   voiceName: string;
   description?: string;
-  profileType: "email-formal";
+  profileType: ProfileType;
+  /** Human-readable hint for the kind of artifact this voice produces (e.g. "email draft", "prose passage"). */
+  voiceFocus?: string;
   normalizedSamples: Array<{
     label: string;
     normalizedText: string;
@@ -168,9 +194,11 @@ export interface ProviderEmailBundleDistillationRequest {
   heuristicSummary: string;
   heuristicRhetoricalDevices: string[];
   heuristicAntiPatterns: string[];
+  /** Present for fiction-prose bundles; lets the model reason about narrative craft signals. */
+  narrativeMetrics?: NarrativeMetrics;
 }
 
-export interface ProviderEmailBundleDistillationResponse {
+export interface ProviderBundleDistillationResponse {
   summary: string;
   voiceRules: string[];
   stableLexicalMarkers: string[];

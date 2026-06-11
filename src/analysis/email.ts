@@ -1,28 +1,8 @@
 import { sha256 } from "../lib/hash.js";
-import { estimateTokens, extractTopMarkers, normalizeWhitespace } from "../lib/text.js";
+import { estimateTokens, normalizeWhitespace } from "../lib/text.js";
 import type { BundleProvenance, SourceProvenance } from "../domain/types.js";
-
-interface NormalizedEmailSample {
-  label: string;
-  sourceKind: "pdf" | "text";
-  sourceType: "path" | "text";
-  originalPath?: string;
-  extractedText: string;
-  normalizedText: string;
-  notes: string[];
-  provenance: SourceProvenance;
-}
-
-export interface EmailBundleAnalysis {
-  combinedText: string;
-  combinedEstimatedTokens: number;
-  stableLexicalMarkers: string[];
-  topicSpecificLexicalMarkers: string[];
-  repeatedPhrases: string[];
-  warnings: string[];
-  normalizedSamples: NormalizedEmailSample[];
-  provenance: BundleProvenance;
-}
+import type { BundleAnalysis, NormalizedSample } from "./bundle.js";
+import { extractRepeatedPhrases, splitStableAndTopicMarkers } from "./markers.js";
 
 const REPLY_HEADERS = [
   /^from:\s/i,
@@ -44,7 +24,7 @@ export function normalizeEmailSample(params: {
   sourceType: "path" | "text";
   originalPath?: string;
   extractedText: string;
-}): NormalizedEmailSample {
+}): NormalizedSample {
   const normalized = normalizeWhitespace(params.extractedText);
   const lines = normalized
     .split("\n")
@@ -107,59 +87,16 @@ function findSignoffIndex(lines: string[]): number {
   return -1;
 }
 
-function extractRepeatedPhrases(text: string): string[] {
-  const words = text.toLowerCase().match(/\b[a-z][a-z'-]+\b/g) ?? [];
-  const counts = new Map<string, number>();
-  for (let index = 0; index < words.length - 2; index += 1) {
-    const phrase = words.slice(index, index + 3).join(" ");
-    if (phrase.length < 12) {
-      continue;
-    }
-    counts.set(phrase, (counts.get(phrase) ?? 0) + 1);
-  }
-
-  return [...counts.entries()]
-    .filter(([, count]) => count >= 2)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
-    .map(([phrase]) => phrase);
-}
-
-export function analyzeEmailBundle(samples: NormalizedEmailSample[]): EmailBundleAnalysis {
+export function analyzeEmailBundle(samples: NormalizedSample[]): BundleAnalysis {
   const warnings: string[] = [];
   const combinedText = normalizeWhitespace(samples.map((sample) => sample.normalizedText).join("\n\n"));
   if (combinedText.length < 3000) {
     warnings.push("Small bundle detected. Add more email samples for stronger cross-sample voice extraction.");
   }
 
-  const sampleMarkerSets = samples.map((sample) => new Set(extractTopMarkers(sample.normalizedText, 20)));
-  const sampleMarkerCounts = new Map<string, { sampleHits: number; totalHits: number }>();
-
-  for (const sample of samples) {
-    const markers = extractTopMarkers(sample.normalizedText, 20);
-    const seen = new Set<string>();
-    for (const marker of markers) {
-      const stats = sampleMarkerCounts.get(marker) ?? { sampleHits: 0, totalHits: 0 };
-      stats.totalHits += 1;
-      if (!seen.has(marker)) {
-        stats.sampleHits += 1;
-        seen.add(marker);
-      }
-      sampleMarkerCounts.set(marker, stats);
-    }
-  }
-
-  const stableLexicalMarkers = [...sampleMarkerCounts.entries()]
-    .filter(([, stats]) => stats.sampleHits >= 2)
-    .sort((a, b) => (b[1].sampleHits - a[1].sampleHits) || (b[1].totalHits - a[1].totalHits))
-    .slice(0, 12)
-    .map(([marker]) => marker);
-
-  const topicSpecificLexicalMarkers = [...sampleMarkerCounts.entries()]
-    .filter(([, stats]) => stats.sampleHits === 1)
-    .sort((a, b) => b[1].totalHits - a[1].totalHits)
-    .slice(0, 12)
-    .map(([marker]) => marker);
+  const { stableLexicalMarkers, topicSpecificLexicalMarkers } = splitStableAndTopicMarkers(
+    samples.map((sample) => sample.normalizedText)
+  );
 
   const provenance: BundleProvenance = {
     normalization: "email-formal-v1",
